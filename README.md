@@ -1,2 +1,2 @@
 # restclients
-Secured and easy to use JS rest clients
+Fast, secured and easy to use JS rest clients
