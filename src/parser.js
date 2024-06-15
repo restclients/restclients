@@ -41,7 +41,6 @@ const methods = [
   "UNSUBSCRIBE",
 ];
 
-const rawType = "raw";
 const seperatorType = "seperator";
 const metaType = "meta";
 const varType = "var";
@@ -73,21 +72,6 @@ const parser = () => {
       return { type: type, error: error, value: value };
     } else {
       return { type: type, value: value };
-    }
-  };
-
-  let normalizeUrl = (url) => {
-    try {
-      new URL(url);
-      return url;
-    } catch (error) {
-      try {
-        url = `http://${url}`;
-        new URL(url);
-        return url;
-      } catch (error) {
-        return null;
-      }
     }
   };
 
@@ -134,6 +118,28 @@ const parser = () => {
       return end;
     };
 
+    let extractVar = (start, end) => {
+      let vars = [];
+      while (start < end) {
+        start = line.indexOf("{{", start);
+        if (start === -1) {
+          break;
+        }
+        let varStart = start;
+        start = line.indexOf("}}", start + 2);
+        if (start === -1) {
+          break;
+        }
+        let wStart = skipLeftBlank(varStart + 2, start - 1);
+        if (!isBlank(wStart)) {
+          vars.push(line.substring(varStart, start + 2));
+          vars.push(line.substring(wStart, skipRightBlank(wStart, start - 1) + 1));
+        }
+        start = start + 2;
+      }
+      return vars;
+    };
+
     let parseHeader = (start, end) => {
       let type = headerType;
       let delimiter = line.indexOf(":", start);
@@ -147,6 +153,10 @@ const parser = () => {
         }
         start = skipLeftBlank(delimiter + 1, end);
         value.push(line.substring(start, end + 1));
+        let vars = extractVar(start, end + 1);
+        if (vars.length > 0) {
+          value.push(vars);
+        }
         return create(type, value);
       } else {
         // invalid header
@@ -157,14 +167,18 @@ const parser = () => {
       }
     };
 
-    let start = 0,
-      end = line.length - 1;
-    if (end === -1) {
-      // blank line
+    let parseBlankLine = (type) => {
       if (type === headerType || type === urlType || type === curlType) {
         type = bodyType;
       }
       return create(type, null);
+    };
+
+    let start = 0,
+      end = line.length - 1;
+    if (end === -1) {
+      // blank line
+      return parseBlankLine(type);
     }
     if (start <= end) {
       if (type !== bodyType) {
@@ -172,10 +186,7 @@ const parser = () => {
         end = skipRightBlank(start, end);
         if (start === end && end < line.length && isBlank(line.charAt(end))) {
           // blank line
-          if (type === headerType || type === urlType || type === curlType) {
-            type = bodyType;
-          }
-          return create(type, null);
+          return parseBlankLine(type);
         }
 
         if (line.charAt(start) === "#" && line.charAt(start + 1) === "#" && line.charAt(start + 2) === "#") {
@@ -290,6 +301,10 @@ const parser = () => {
               }
               start = skipLeftBlank(delimiter + 1, end);
               value.push(line.substring(start, end + 1));
+              let vars = extractVar(start, end + 1);
+              if (vars.length > 0) {
+                value.push(vars);
+              }
               return create(type, value);
             } else {
               // invalid var
@@ -312,6 +327,10 @@ const parser = () => {
                 type = curlType;
                 start = skipLeftBlank(start, end);
                 let value = start <= end ? [line.substring(start, end + 1)] : [];
+                let vars = extractVar(start, end + 1);
+                if (vars.length > 0) {
+                  value.push(vars);
+                }
                 return create(type, value);
               } else {
                 type = urlType;
@@ -329,29 +348,28 @@ const parser = () => {
                   value.push(line.substring(varStart, start));
                 }
 
-                let url = normalizeUrl(value[1]);
-                let error = undefined;
-                if (url !== null) {
-                  value[1] = url;
-                } else {
-                  error = {
-                    code: "S050001",
-                    stack: new Error().stack,
-                  };
-                }
+                let vars = extractVar(varStart, start);
 
                 start = skipLeftBlank(start, end);
                 if (start <= end) {
                   value.push(line.substring(start, end + 1));
                 }
-                return create(type, value, error);
+                if (vars.length > 0) {
+                  value.push(vars);
+                }
+                return create(type, value);
               }
             }
           }
         } else if (type === urlType) {
           if (line.charAt(start) === "?" || line.charAt(start) === "&") {
             // url type query
-            return create(type, [line.substring(start, end + 1)]);
+            let value = [line.substring(start, end + 1)];
+            let vars = extractVar(start, end + 1);
+            if (vars.length > 0) {
+              value.push(vars);
+            }
+            return create(type, value);
           } else {
             // header type
             return parseHeader(start, end);
@@ -367,8 +385,12 @@ const parser = () => {
         }
       } else {
         // body type
-        console.log(line);
-        return create(bodyType, [line]);
+        let value = [line];
+        let vars = extractVar(start, end + 1);
+        if (vars.length > 0) {
+          value.push(vars);
+        }
+        return create(bodyType, value);
       }
     }
   };
@@ -416,4 +438,20 @@ const parser = () => {
   return parser;
 };
 
-module.exports = parser;
+module.exports = {
+  parser,
+  seperatorType,
+  metaType,
+  varType,
+  urlType,
+  curlType,
+  headerType,
+  bodyType,
+  metaTypeName,
+  metaTypeNote,
+  metaTypeNoRedirect,
+  metaTypeNoCookieJar,
+  metaTypePrompt,
+  metaTypeComment,
+  errorCodes,
+};

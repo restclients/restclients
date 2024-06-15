@@ -1,5 +1,5 @@
 const { describe, expect, it } = require("@jest/globals");
-const parser = require("./parser")();
+const parser = require("./parser")["parser"]();
 
 describe("parser blank line", function () {
   it("with", function () {
@@ -9,8 +9,6 @@ describe("parser blank line", function () {
 
   it("with/", function () {
     const exprs = parser("/", true);
-    expect(exprs).toHaveProperty("[0].error.code", "S050001");
-    delete exprs[0].error;
     expect(exprs).toEqual([{ type: "url", value: ["GET", "/"] }]);
   });
 
@@ -419,7 +417,9 @@ describe("parser var type", function () {
 
   it("@host = {{hostname}}:{{port}}", function () {
     const exprs = parser("@host = {{hostname}}:{{port}}\n", true);
-    expect(exprs).toEqual([{ type: "var", value: ["host", "{{hostname}}:{{port}}"] }]);
+    expect(exprs).toEqual([
+      { type: "var", value: ["host", "{{hostname}}:{{port}}", ["{{hostname}}", "hostname", "{{port}}", "port"]] },
+    ]);
   });
 
   it("@contentType = application/json", function () {
@@ -429,24 +429,31 @@ describe("parser var type", function () {
 
   it("@createdAt = {{$datetime iso8601}}", function () {
     const exprs = parser("@createdAt = {{$datetime iso8601}}\n", true);
-    expect(exprs).toEqual([{ type: "var", value: ["createdAt", "{{$datetime iso8601}}"] }]);
+    expect(exprs).toEqual([
+      { type: "var", value: ["createdAt", "{{$datetime iso8601}}", ["{{$datetime iso8601}}", "$datetime iso8601"]] },
+    ]);
   });
 
   it("@modifiedBy = {{$processEnv USERNAME}}", function () {
     const exprs = parser("@modifiedBy = {{$processEnv USERNAME}}\n", true);
-    expect(exprs).toEqual([{ type: "var", value: ["modifiedBy", "{{$processEnv USERNAME}}"] }]);
+    expect(exprs).toEqual([
+      {
+        type: "var",
+        value: ["modifiedBy", "{{$processEnv USERNAME}}", ["{{$processEnv USERNAME}}", "$processEnv USERNAME"]],
+      },
+    ]);
   });
 });
 
 describe("parser url type", function () {
   it("example", function () {
     const exprs = parser("example\n", true);
-    expect(exprs).toEqual([{ type: "url", value: ["GET", "http://example"] }]);
+    expect(exprs).toEqual([{ type: "url", value: ["GET", "example"] }]);
   });
 
   it("example.com/", function () {
     const exprs = parser("example.com/\n", true);
-    expect(exprs).toEqual([{ type: "url", value: ["GET", "http://example.com/"] }]);
+    expect(exprs).toEqual([{ type: "url", value: ["GET", "example.com/"] }]);
   });
 
   it("http://example.com?q=a", function () {
