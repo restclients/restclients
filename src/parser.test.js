@@ -1,5 +1,20 @@
 const { describe, expect, it } = require("@jest/globals");
 const parser = require("./parser")["parser"]();
+const tokenizer = require("./parser").tokenizer;
+
+describe("tokenizer.processDotenv", function () {
+  it("a=b", function () {
+    const expr = tokenizer("", "a=b").processDotenv();
+    expect(expr).toEqual({ type: "var", value: ["a", "b"] });
+  });
+
+  it("a=\"b\"", function () {
+    const expr = tokenizer("", "a=\"b\"").processDotenv();
+    expect(expr).toEqual({ type: "var", value: ["a", "b"] });
+  });
+
+  
+});
 
 describe("parser blank line", function () {
   it("with", function () {
@@ -367,7 +382,7 @@ describe("parser var type", function () {
     const exprs = parser("@\n", true);
     expect(exprs).toHaveProperty("[0].error.code", "S040001");
     delete exprs[0].error;
-    expect(exprs).toEqual([{ type: "var", value: ["@"] }]);
+    expect(exprs).toEqual([{ type: "var", value: [] }]);
   });
 
   it("@a=", function () {

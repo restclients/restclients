@@ -64,116 +64,143 @@ const errorCodes = {
   S070001: "Invalid header",
 };
 
-const parser = () => {
-  "use strict";
+let create = function (type, value, error = null) {
+  if (error) {
+    return { type: type, error: error, value: value };
+  } else {
+    return { type: type, value: value };
+  }
+};
 
-  let create = function (type, value, error = null) {
-    if (error) {
-      return { type: type, error: error, value: value };
+var tokenizer = function (type, line) {
+  let isBlank = (char) => {
+    return char === " " || char === "\t" || char === "\r" || char === "\n" || char === "\f" || char === "\v";
+  };
+
+  let isMetaType = (start, end, metaType) => {
+    let len = metaType.length;
+    return (
+      ((end - start > len - 1 && isBlank(line.charAt(start + len))) || end - start === len - 1) &&
+      line.substring(start, start + len).toLowerCase() === metaType
+    );
+  };
+
+  let nextBlank = (start, end) => {
+    if (start > end) {
+      return end + 1;
+    }
+    while (start <= end && !isBlank(line.charAt(start))) {
+      ++start;
+    }
+    return start;
+  };
+
+  let skipLeftBlank = (start, end) => {
+    if (start > end) {
+      return end + 1;
+    }
+    while (start < end && isBlank(line.charAt(start))) {
+      ++start;
+    }
+    return start;
+  };
+
+  let skipRightBlank = (start, end) => {
+    if (start > end) {
+      return end + 1;
+    }
+    while (start < end && isBlank(line.charAt(end))) {
+      --end;
+    }
+    return end;
+  };
+
+  let extractVar = (start, end) => {
+    let vars = [];
+    while (start < end) {
+      start = line.indexOf("{{", start);
+      if (start === -1) {
+        break;
+      }
+      let varStart = start;
+      start = line.indexOf("}}", start + 2);
+      if (start === -1) {
+        break;
+      }
+      let wStart = skipLeftBlank(varStart + 2, start - 1);
+      if (!isBlank(wStart)) {
+        vars.push(line.substring(varStart, start + 2));
+        vars.push(line.substring(wStart, skipRightBlank(wStart, start - 1) + 1));
+      }
+      start = start + 2;
+    }
+    return vars;
+  };
+
+  let parseHeader = (start, end) => {
+    let type = headerType;
+    let delimiter = line.indexOf(":", start);
+    if (delimiter > 0) {
+      let value = [];
+
+      let varStart = start;
+      start = skipRightBlank(start, delimiter - 1);
+      if (varStart <= start) {
+        value.push(line.substring(varStart, start + 1));
+      }
+      start = skipLeftBlank(delimiter + 1, end);
+      value.push(line.substring(start, end + 1));
+      let vars = extractVar(start, end + 1);
+      if (vars.length > 0) {
+        value.push(vars);
+      }
+      return create(type, value);
     } else {
-      return { type: type, value: value };
+      // invalid header
+      return create(type, [line.substring(start, end + 1)], {
+        code: "S070001",
+        stack: new Error().stack,
+      });
     }
   };
 
-  var tokenizer = function (type, line) {
-    let isBlank = (char) => {
-      return char === " " || char === "\t" || char === "\r" || char === "\n" || char === "\f" || char === "\v";
-    };
+  let parseBlankLine = (type) => {
+    if (type === headerType || type === urlType || type === curlType) {
+      type = bodyType;
+    }
+    return create(type, null);
+  };
 
-    let isMetaType = (start, end, metaType) => {
-      let len = metaType.length;
-      return (
-        ((end - start > len - 1 && isBlank(line.charAt(start + len))) || end - start === len - 1) &&
-        line.substring(start, start + len).toLowerCase() === metaType
-      );
-    };
-
-    let nextBlank = (start, end) => {
-      if (start > end) {
-        return end + 1;
+  let parseVar = (start, end) => {
+    let type = varType;
+    let delimiter = line.indexOf("=", start);
+    let value = [];
+    if (start < end && !isBlank(line.charAt(start)) && delimiter > 0) {
+      let varStart = start;
+      start = skipRightBlank(start, delimiter - 1);
+      if (varStart <= start) {
+        value.push(line.substring(varStart, start + 1));
       }
-      while (start <= end && !isBlank(line.charAt(start))) {
-        ++start;
+      start = skipLeftBlank(delimiter + 1, end);
+      value.push(line.substring(start, end + 1));
+      let vars = extractVar(start, end + 1);
+      if (vars.length > 0) {
+        value.push(vars);
       }
-      return start;
-    };
-
-    let skipLeftBlank = (start, end) => {
-      if (start > end) {
-        return end + 1;
-      }
-      while (start < end && isBlank(line.charAt(start))) {
-        ++start;
-      }
-      return start;
-    };
-
-    let skipRightBlank = (start, end) => {
-      if (start > end) {
-        return end + 1;
-      }
-      while (start < end && isBlank(line.charAt(end))) {
-        --end;
-      }
-      return end;
-    };
-
-    let extractVar = (start, end) => {
-      let vars = [];
-      while (start < end) {
-        start = line.indexOf("{{", start);
-        if (start === -1) {
-          break;
-        }
-        let varStart = start;
-        start = line.indexOf("}}", start + 2);
-        if (start === -1) {
-          break;
-        }
-        let wStart = skipLeftBlank(varStart + 2, start - 1);
-        if (!isBlank(wStart)) {
-          vars.push(line.substring(varStart, start + 2));
-          vars.push(line.substring(wStart, skipRightBlank(wStart, start - 1) + 1));
-        }
-        start = start + 2;
-      }
-      return vars;
-    };
-
-    let parseHeader = (start, end) => {
-      let type = headerType;
-      let delimiter = line.indexOf(":", start);
-      if (delimiter > 0) {
-        let value = [];
-
-        let varStart = start;
-        start = skipRightBlank(start, delimiter - 1);
-        if (varStart <= start) {
-          value.push(line.substring(varStart, start + 1));
-        }
-        start = skipLeftBlank(delimiter + 1, end);
+      return create(type, value);
+    } else {
+      // invalid var
+      if (start <= end) {
         value.push(line.substring(start, end + 1));
-        let vars = extractVar(start, end + 1);
-        if (vars.length > 0) {
-          value.push(vars);
-        }
-        return create(type, value);
-      } else {
-        // invalid header
-        return create(type, [line.substring(start, end + 1)], {
-          code: "S070001",
-          stack: new Error().stack,
-        });
       }
-    };
+      return create(type, value, {
+        code: "S040001",
+        stack: new Error().stack,
+      });
+    }
+  };
 
-    let parseBlankLine = (type) => {
-      if (type === headerType || type === urlType || type === curlType) {
-        type = bodyType;
-      }
-      return create(type, null);
-    };
-
+  let process = () => {
     let start = 0,
       end = line.length - 1;
     if (end === -1) {
@@ -290,32 +317,8 @@ const parser = () => {
             }
           } else if (line.charAt(start) === "@") {
             // variable line
-            type = varType;
-            let delimiter = line.indexOf("=", start + 1);
-            let value = [];
-            if (start + 1 < end && !isBlank(line.charAt(start + 1)) && delimiter > 0) {
-              let varStart = start + 1;
-              start = skipRightBlank(start, delimiter - 1);
-              if (varStart <= start) {
-                value.push(line.substring(varStart, start + 1));
-              }
-              start = skipLeftBlank(delimiter + 1, end);
-              value.push(line.substring(start, end + 1));
-              let vars = extractVar(start, end + 1);
-              if (vars.length > 0) {
-                value.push(vars);
-              }
-              return create(type, value);
-            } else {
-              // invalid var
-              if (start <= end) {
-                value.push(line.substring(start, end + 1));
-              }
-              return create(type, value, {
-                code: "S040001",
-                stack: new Error().stack,
-              });
-            }
+            ++start;
+            return parseVar(start, end);
           } else {
             // should be url type
             let varStart = start;
@@ -394,6 +397,17 @@ const parser = () => {
       }
     }
   };
+  let processDotenv = () => {
+    let start = 0,
+      end = line.length - 1;
+
+    return parseVar(start, end);
+  };
+  return { process, processDotenv };
+};
+
+const parser = () => {
+  "use strict";
 
   var parser = function (source, recover) {
     if (!source || typeof source !== "string") {
@@ -410,7 +424,8 @@ const parser = () => {
       }
       let line = source.substring(position, lineEnd);
       try {
-        let expr = tokenizer(type, line);
+        const { process } = tokenizer(type, line);
+        let expr = process();
         exprs.push(expr);
         if (expr && !expr.error) {
           type = expr.type;
@@ -439,6 +454,7 @@ const parser = () => {
 };
 
 module.exports = {
+  tokenizer,
   parser,
   seperatorType,
   metaType,
