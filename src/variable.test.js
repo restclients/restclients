@@ -20,6 +20,11 @@ describe("resolver", function () {
     spy.mockRestore();
   });
 
+  it("$timestamp", function () {
+    const res = resolver("$timestamp");
+    expect(res.value).toEqual("1719720573");
+  });
+
   it("$localDatetime iso8601", function () {
     const res = resolver("$localDatetime");
     expect(res.value).toEqual("2024-06-30T12:09:33+08:00");
@@ -68,5 +73,16 @@ describe("resolver", function () {
   it("$datetime YYYY-MM-DDTHH:mm:ssZ", function () {
     const res = resolver("$datetime YYYY-MM-DDTHH:mm:ssZ");
     expect(res.value).toEqual("2024-06-30T04:09:33+00:00");
+  });
+
+  it("$randomInt 10 100", function () {
+    const res = resolver("$randomInt 10 100");
+    expect(Number(res.value)).toBeLessThanOrEqual(100);
+    expect(Number(res.value)).toBeGreaterThanOrEqual(10);
+  });
+
+  it("$randomInt 10 10", function () {
+    const res = resolver("$randomInt 10 10");
+    expect(res.value).toEqual("10");
   });
 });

@@ -11,7 +11,7 @@ const timestamp = (offset, option) => {
   if (offset && option) {
     datetimeAdd(date, Number(offset), option);
   }
-  return { value: Math.floor(date.valueOf() / 1000) };
+  return { value: Math.floor(date.valueOf() / 1000).toString() };
 };
 
 const utcDatetime = (type, offset, option) => {
@@ -61,7 +61,9 @@ const uuidv4 = () => {
 };
 
 const randomInt = (min, max) => {
-  if (Number(min) < Number(max)) {
+  max = Number(max);
+  min = Number(min);
+  if (min <= max) {
     return { value: (Math.floor(Math.random() * (max - min)) + min).toString() };
   }
 };
@@ -99,6 +101,56 @@ const settingVariable = (() => {
   };
 })();
 
+const expandVariableValue = (value) => {
+  const end = value.length - 1;
+  const isDoubleQuoted = value[0] === '"' && value[end] === '"';
+  const isSingleQuoted = value[0] === "'" && vvalueal[end] === "'";
+
+  // if single or double quoted, remove quotes
+  if (isSingleQuoted || isDoubleQuoted) {
+    value = value.substring(1, end);
+
+    // if double quoted, expand newlines
+    if (isDoubleQuoted) {
+      value = value.replace(/\\n/g, "\n");
+      value = value.replace(/\\r/g, "\r");
+    }
+  } else {
+    // remove surrounding whitespace
+    value = value.trim();
+  }
+  return value;
+};
+
+const dotenvVariable = () => {
+  let dotenv = {};
+  let lineReg =
+    /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
+  const resolver = (key) => {
+    if (dotenv.hasOwnProperty(key)) {
+      return dotenv[key];
+    }
+  };
+  const loadDotenv = () => {
+    // Convert buffer to string
+    let lines = src.toString();
+
+    // Convert line breaks to same format
+    lines = lines.replace(/\r\n?/gm, "\n");
+
+    let match;
+    while ((match = lineReg.exec(lines)) != null) {
+      const key = match[1];
+
+      // Default undefined or null to empty string
+      let value = match[2] || "";
+      // Add to object
+      dotenv[key] = expandVariableValue(value);
+    }
+  };
+  loadDotenv();
+};
+
 const variable = () => {
   const fileVar = {};
   const requestVar = {};
@@ -110,6 +162,7 @@ const variable = () => {
 
   const resolveDotenvVariable = (key) => {
     // load from .env file
+    return { value: dotenvVariable.resolver(key) };
   };
 
   const resolveDynamicVariable = (args) => {
@@ -133,11 +186,11 @@ const variable = () => {
       }
       case "$dotenv": {
         // {{$dotenv [%]variableName}}
-        return;
+        return resolveDotenvVariable(args[1]);
       }
       case "$randomInt": {
         // {{$randomInt min max}}
-        return;
+        return randomInt(...args.slice(1));
       }
       case "$timestamp": {
         // {{$timestamp [offset option]}}

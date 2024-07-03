@@ -8,12 +8,10 @@ describe("tokenizer.processDotenv", function () {
     expect(expr).toEqual({ type: "var", value: ["a", "b"] });
   });
 
-  it("a=\"b\"", function () {
-    const expr = tokenizer("", "a=\"b\"").processDotenv();
+  it('a="b"', function () {
+    const expr = tokenizer("", 'a="b"').processDotenv();
     expect(expr).toEqual({ type: "var", value: ["a", "b"] });
   });
-
-  
 });
 
 describe("parser blank line", function () {
@@ -435,6 +433,26 @@ describe("parser var type", function () {
     expect(exprs).toEqual([
       { type: "var", value: ["host", "{{hostname}}:{{port}}", ["{{hostname}}", "hostname", "{{port}}", "port"]] },
     ]);
+  });
+
+  it("@signleQuoted = '  dsdaf  '", function () {
+    const exprs = parser("@signleQuoted = '  dsdaf  '\n", true);
+    expect(exprs).toEqual([{ type: "var", value: ["signleQuoted", "'  dsdaf  '"] }]);
+  });
+
+  it("@signleQuoted = '  ds\\ndaf  '", function () {
+    const exprs = parser("@signleQuoted = '  ds\\ndaf  '\n", true);
+    expect(exprs).toEqual([{ type: "var", value: ["signleQuoted", "'  ds\\ndaf  '"] }]);
+  });
+
+  it('@doubleQuoted = "  dsdaf  "', function () {
+    const exprs = parser('@signleQuoted = "  dsdaf  "\n', true);
+    expect(exprs).toEqual([{ type: "var", value: ["signleQuoted", '"  dsdaf  "'] }]);
+  });
+
+  it('@signleQuoted = "  ds\\ndaf  "', function () {
+    const exprs = parser('@signleQuoted = "  ds\\ndaf  "\n', true);
+    expect(exprs).toEqual([{ type: "var", value: ["signleQuoted", '"  ds\\ndaf  "'] }]);
   });
 
   it("@contentType = application/json", function () {
