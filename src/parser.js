@@ -397,13 +397,7 @@ var tokenizer = function (type, line) {
       }
     }
   };
-  let processDotenv = () => {
-    let start = 0,
-      end = line.length - 1;
-
-    return parseVar(start, end);
-  };
-  return { process, processDotenv };
+  return { process };
 };
 
 const parser = () => {

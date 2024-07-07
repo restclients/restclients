@@ -68,14 +68,6 @@ const randomInt = (min, max) => {
   }
 };
 
-const processEnv = () => {
-  // setting env
-};
-
-const dotenv = () => {
-  // .env
-};
-
 const aadToken = () => {};
 
 const aadV2Token = () => {};
@@ -87,24 +79,40 @@ const settingVariable = (() => {
 
   // new RegExp(`\\{{2}\\$${environment} (.+?)\\}{2}`);
 
-  const resolver = (key) => {};
-  const updateSetting = (setting) => {
-    currentSeletcion = setting;
+  const resolver = (key) => {
+    if (Object.hasOwnProperty.call(availableSetting, key)) {
+      return availableSetting[key].toString();
+    }
   };
-  const updateSelection = (selection) => {
-    currentSeletcion = selection;
+  const setSetting = (setting) => {
+    currentSetting = setting;
+    const data = Object.assign({}, setting);
+    populateVariableValue("shared", data["$shared"], data["$shared"]);
+    if (currentSeletcion !== "" && Object.hasOwnProperty.call(currentSetting, currentSeletcion)) {
+      populateVariableValue("shared", data[currentSeletcion], data["$shared"]);
+      populateVariableValue(currentSeletcion, data[currentSeletcion], data[currentSeletcion]);
+      availableSetting = Object.assign({}, data["$shared"], data[currentSeletcion]);
+    } else {
+      availableSetting = Object.assign({}, data["$shared"]);
+    }
+  };
+  const setSelection = (selection) => {
+    if (currentSeletcion !== selection && Object.hasOwnProperty.call(currentSetting, selection)) {
+      currentSeletcion = selection;
+      setSetting(currentSetting);
+    }
   };
   return {
     resolver,
-    updateSetting,
-    updateSelection,
+    setSetting,
+    setSelection,
   };
 })();
 
 const expandVariableValue = (value) => {
   const end = value.length - 1;
   const isDoubleQuoted = value[0] === '"' && value[end] === '"';
-  const isSingleQuoted = value[0] === "'" && vvalueal[end] === "'";
+  const isSingleQuoted = value[0] === "'" && value[end] === "'";
 
   // if single or double quoted, remove quotes
   if (isSingleQuoted || isDoubleQuoted) {
@@ -122,16 +130,37 @@ const expandVariableValue = (value) => {
   return value;
 };
 
-const dotenvVariable = () => {
+const populateVariableValue = (environment, des, src) => {
+  const variableRegex = new RegExp(`\\{{2}\\s*\\$${environment} (.+?)\\}{2}`, "gm");
+  for (const [key, value] of Object.entries(des)) {
+    if (typeof value === "string") {
+      let match;
+      let populated = false;
+      let populatedValue = value;
+      while ((match = variableRegex.exec(value)) !== null) {
+        const referenceKey = match[1].trim();
+        populatedValue = populatedValue.replace(match[0], src[referenceKey]);
+        populated = true;
+      }
+      if (populated) {
+        des[key] = populatedValue;
+      }
+    }
+  }
+};
+
+const dotenvVariable = (() => {
   let dotenv = {};
   let lineReg =
     /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
   const resolver = (key) => {
-    if (dotenv.hasOwnProperty(key)) {
+    if (Object.hasOwnProperty.call(dotenv, key)) {
       return dotenv[key];
     }
   };
-  const loadDotenv = () => {
+  // load default .env file path
+  // const dotenvPath = path.resolve(process.cwd(), '.env')
+  const setDotenv = (src) => {
     // Convert buffer to string
     let lines = src.toString();
 
@@ -148,8 +177,15 @@ const dotenvVariable = () => {
       dotenv[key] = expandVariableValue(value);
     }
   };
-  loadDotenv();
-};
+  const resetDotenv = () => {
+    dotenv = {};
+  };
+  return {
+    resolver,
+    setDotenv,
+    resetDotenv,
+  };
+})();
 
 const variable = () => {
   const fileVar = {};
@@ -162,7 +198,23 @@ const variable = () => {
 
   const resolveDotenvVariable = (key) => {
     // load from .env file
+    if (key && key.startsWith("%")) {
+      key = settingVariable.resolver(key.slice(1));
+    }
     return { value: dotenvVariable.resolver(key) };
+  };
+
+  const resolveProcessEnvVariable = (key) => {
+    if (key && key.startsWith("%")) {
+      key = settingVariable.resolver(key.slice(1));
+    }
+    if (process && process.env) {
+      const envValue = process.env[key];
+      if (envValue !== undefined) {
+        return { value: envValue.toString() };
+      }
+    }
+    return { value: undefined };
   };
 
   const resolveDynamicVariable = (args) => {
@@ -182,7 +234,7 @@ const variable = () => {
 
       case "$processEnv": {
         // {{$processEnv [%]envVarName}}
-        return;
+        return resolveProcessEnvVariable(args[1]);
       }
       case "$dotenv": {
         // {{$dotenv [%]variableName}}
@@ -210,11 +262,20 @@ const variable = () => {
   let resolver = (expr) => {
     if (expr[0] === "$") {
       return resolveDynamicVariable(expr.split(" ").map((item) => item.trim()));
+    } else {
+      return resolveSettingVariable(expr);
     }
   };
   let process = function (exprs) {};
 
-  return { resolver, process };
+  return {
+    resolver,
+    process,
+    setSelection: settingVariable.setSelection,
+    setSetting: settingVariable.setSetting,
+    resetDotenv: dotenvVariable.resetDotenv,
+    setDotenv: dotenvVariable.setDotenv,
+  };
 };
 
 module.exports = {

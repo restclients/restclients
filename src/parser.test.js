@@ -1,18 +1,6 @@
 const { describe, expect, it } = require("@jest/globals");
 const parser = require("./parser")["parser"]();
-const tokenizer = require("./parser").tokenizer;
-
-describe("tokenizer.processDotenv", function () {
-  it("a=b", function () {
-    const expr = tokenizer("", "a=b").processDotenv();
-    expect(expr).toEqual({ type: "var", value: ["a", "b"] });
-  });
-
-  it('a="b"', function () {
-    const expr = tokenizer("", 'a="b"').processDotenv();
-    expect(expr).toEqual({ type: "var", value: ["a", "b"] });
-  });
-});
+// const tokenizer = require("./parser").tokenizer;
 
 describe("parser blank line", function () {
   it("with", function () {
