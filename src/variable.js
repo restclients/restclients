@@ -4,7 +4,8 @@
  *   This project is licensed under the Apache 2 License, see LICENSE
  */
 
-const { datetimeAdd, datetimeFormat } = require("./util");
+const { metaType, varType, metaTypeName } = require("./parser");
+const { datetimeAdd, datetimeFormat, isArray } = require("./util");
 
 const timestamp = (offset, option) => {
   const date = new Date();
@@ -67,10 +68,6 @@ const randomInt = (min, max) => {
     return { value: (Math.floor(Math.random() * (max - min)) + min).toString() };
   }
 };
-
-const aadToken = () => {};
-
-const aadV2Token = () => {};
 
 const settingVariable = (() => {
   let currentSetting = {};
@@ -187,10 +184,7 @@ const dotenvVariable = (() => {
   };
 })();
 
-const variable = () => {
-  const fileVar = {};
-  const requestVar = {};
-
+const variable = (exprs) => {
   const resolveSettingVariable = (key) => {
     // load from setting
     return { value: settingVariable.resolver(key) };
@@ -259,22 +253,351 @@ const variable = () => {
     }
   };
 
-  let resolver = (expr) => {
-    if (expr[0] === "$") {
-      return resolveDynamicVariable(expr.split(" ").map((item) => item.trim()));
-    } else {
-      return resolveSettingVariable(expr);
+  const documentVariable = ((exprs) => {
+    let fileVariable = {};
+    let requestVariable = {};
+
+    let resolvedVariables = [];
+    let reference = {};
+    for (const expr of exprs) {
+      // build file variable
+      if (expr && expr.type === varType && isArray(expr.value) && expr.value.length >= 2) {
+        if (expr.value.length > 2 && isArray(expr.value[2]) && expr.value[2].length >= 2) {
+          fileVariable[expr.value[0]] = { value: expr.value[1], args: expr.value[2] };
+        } else {
+          fileVariable[expr.value[0]] = { value: expr.value[1], args: null };
+          resolvedVariables.push(expr.value[0]);
+        }
+      }
+      // build request variable
+      if (
+        expr &&
+        expr.type === metaType &&
+        isArray(expr.value) &&
+        expr.value.length >= 2 &&
+        expr.value[0] === metaTypeName
+      ) {
+        requestVariable[expr.value[1]] = null;
+      }
     }
-  };
-  let process = function (exprs) {};
+
+    for (const [key, { args }] of Object.entries(fileVariable)) {
+      if (isArray(args) && args.length >= 2) {
+        for (let i = 0; i < args.length - 1; i += 2) {
+          if (isArray(args[i + 1]) && args[i + 1].length === 1 && !args[i + 1][0].startsWith("$")) {
+            let referenceKey = args[i + 1][0];
+            if (referenceKey.startsWith("%")) {
+              referenceKey = referenceKey.substring(1);
+            }
+            if (Object.hasOwnProperty.call(fileVariable, referenceKey)) {
+              if (reference[referenceKey]) {
+                reference[referenceKey].push(key);
+              } else {
+                reference[referenceKey] = [key];
+              }
+            }
+          }
+        }
+      }
+    }
+
+    while (resolvedVariables.length > 0) {
+      let resolved = resolvedVariables.pop();
+      if (reference[resolved] && fileVariable[resolved]) {
+        let resolvedValue = fileVariable[resolved].value;
+        for (const target of reference[resolved]) {
+          if (fileVariable[target]) {
+            let args = fileVariable[target].args;
+            let resolvedIndex = [];
+            if (isArray(args) && args.length >= 2) {
+              for (let i = 0; i < args.length - 1; i += 2) {
+                if (
+                  isArray(args[i + 1]) &&
+                  args[i + 1].length === 1 &&
+                  (args[i + 1][0] === resolved || args[i + 1][0] === "%" + resolved)
+                ) {
+                  if (args[i + 1][0][0] === "%") {
+                    fileVariable[target].value = fileVariable[target].value.replace(
+                      args[i],
+                      encodeURIComponent(resolvedValue)
+                    );
+                  } else {
+                    fileVariable[target].value = fileVariable[target].value.replace(args[i], resolvedValue);
+                  }
+                  resolvedIndex.push(i);
+                }
+              }
+            }
+            if (resolvedIndex.length > 0) {
+              let removedCount = 0;
+              for (const removed of resolvedIndex) {
+                args.splice(removed - removedCount, 2);
+                removedCount += 2;
+              }
+            }
+            if (args.length < 2) {
+              // all dependency resolved
+              resolvedVariables.push(target);
+            }
+          }
+        }
+      }
+    }
+    console.log(fileVariable, reference);
+
+    const resolveFileVariable = (variables) => {
+      const resolved = [];
+      const resolvedFileVariable = {};
+
+      const resolveFileVariableDependencies = (variable) => {
+        let fileVariableDependencies = [];
+        if (isArray(variable.args) && variable.args.length >= 2) {
+          let resolvedIndex = [];
+          for (let i = 0; i < variable.args.length - 1; i += 2) {
+            if (
+              isArray(variable.args[i + 1]) &&
+              variable.args[i + 1].length === 1 &&
+              !variable.args[i + 1][0].startsWith("$")
+            ) {
+              let referenceKey = variable.args[i + 1][0];
+              if (referenceKey.startsWith("%")) {
+                referenceKey = referenceKey.substring(1);
+              }
+              if (Object.hasOwnProperty.call(fileVariable, referenceKey)) {
+                if (
+                  fileVariable[referenceKey].args === null ||
+                  (isArray(fileVariable[referenceKey].args) && fileVariable[referenceKey].args.length < 2)
+                ) {
+                  // no dependency variable
+                  if (variable.args[i + 1][0][0] === "%") {
+                    variable.value = variable.value.replace(
+                      variable.args[i],
+                      encodeURIComponent(fileVariable[referenceKey].value)
+                    );
+                  } else {
+                    variable.value = variable.value.replace(variable.args[i], fileVariable[referenceKey].value);
+                  }
+                  resolvedIndex.push(i);
+                } else {
+                  if (
+                    !Object.hasOwnProperty.call(resolvedFileVariable, referenceKey) &&
+                    fileVariableDependencies.indexOf(referenceKey) < 0
+                  ) {
+                    fileVariableDependencies.push(referenceKey);
+                  }
+                }
+              } else {
+                let { value } = resolveSettingVariable(referenceKey);
+                if (value !== undefined) {
+                  if (variable.args[i + 1][0][0] === "%") {
+                    variable.value = variable.value.replace(variable.args[i], encodeURIComponent(value));
+                  } else {
+                    variable.value = variable.value.replace(variable.args[i], value);
+                  }
+                  resolvedIndex.push(i);
+                }
+              }
+            } else {
+              let { value } = resolveDynamicVariable(variable.args[i + 1]);
+              if (value !== undefined) {
+                variable.value = variable.value.replace(variable.args[i], value);
+                resolvedIndex.push(i);
+              }
+            }
+          }
+
+          if (resolvedIndex.length > 0) {
+            let removedCount = 0;
+            for (const removed of resolvedIndex) {
+              variable.args.splice(removed - removedCount, 2);
+              removedCount += 2;
+            }
+          }
+        }
+
+        return fileVariableDependencies;
+      };
+
+      for (const variable of variables) {
+        let dependencies = resolveFileVariableDependencies(variable);
+        while (dependencies.length > 0) {
+          let dependency = dependencies.pop();
+          if (!Object.hasOwnProperty.call(resolvedFileVariable, dependency)) {
+            resolvedFileVariable[dependency] = structuredClone(fileVariable[dependency]);
+            if (
+              resolvedFileVariable[dependency].args === null ||
+              (isArray(resolvedFileVariable[dependency].args) && resolvedFileVariable[dependency].args.length < 2)
+            ) {
+              if (resolved.indexOf(dependency) < 0) {
+                resolved.push(dependency);
+              }
+            }
+
+            for (const [referenceKey, dependents] of Object.entries(reference)) {
+              if (dependents.indexOf(dependency) >= 0) {
+                if (!Object.hasOwnProperty.call(resolvedFileVariable, referenceKey)) {
+                  dependencies.push(referenceKey);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      console.log(resolvedFileVariable, resolved);
+
+      for (let key of Object.keys(resolvedFileVariable)) {
+        let args = resolvedFileVariable[key].args;
+        let resolvedIndex = [];
+        if (isArray(args) && args.length >= 2) {
+          for (let i = 0; i < args.length - 1; i += 2) {
+            if (isArray(args[i + 1]) && args[i + 1].length === 1 && !args[i + 1][0].startsWith("$")) {
+              let referenceKey = args[i + 1][0];
+              if (referenceKey.startsWith("%")) {
+                referenceKey = referenceKey.substring(1);
+              }
+              if (!Object.hasOwnProperty.call(fileVariable, referenceKey)) {
+                let { value } = resolveSettingVariable(referenceKey);
+                if (value !== undefined) {
+                  if (args[i + 1][0][0] === "%") {
+                    resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(
+                      args[i],
+                      encodeURIComponent(value)
+                    );
+                  } else {
+                    resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(args[i], value);
+                  }
+                  resolvedIndex.push(i);
+                }
+              }
+            } else {
+              let { value } = resolveDynamicVariable(args[i + 1]);
+              if (value !== undefined) {
+                resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(args[i], value);
+                resolvedIndex.push(i);
+              }
+            }
+          }
+          if (resolvedIndex.length > 0) {
+            let removedCount = 0;
+            for (const removed of resolvedIndex) {
+              args.splice(removed - removedCount, 2);
+              removedCount += 2;
+            }
+          }
+          if (args.length < 2) {
+            // all dependency resolved
+            if (resolved.indexOf(key) < 0) {
+              resolved.push(key);
+            }
+          }
+        }
+      }
+
+      console.log(resolvedFileVariable, resolved);
+
+      while (resolved.length > 0) {
+        let resolvedKey = resolved.pop();
+        if (reference[resolvedKey] && resolvedFileVariable[resolvedKey]) {
+          let resolvedValue = resolvedFileVariable[resolvedKey].value;
+          for (const target of reference[resolvedKey]) {
+            if (resolvedFileVariable[target]) {
+              let args = resolvedFileVariable[target].args;
+              let resolvedIndex = [];
+              if (isArray(args) && args.length >= 2) {
+                for (let i = 0; i < args.length - 1; i += 2) {
+                  if (
+                    isArray(args[i + 1]) &&
+                    args[i + 1].length === 1 &&
+                    (args[i + 1][0] === resolvedKey || args[i + 1][0] === "%" + resolvedKey)
+                  ) {
+                    if (args[i + 1][0][0] === "%") {
+                      resolvedFileVariable[target].value = resolvedFileVariable[target].value.replace(
+                        args[i],
+                        encodeURIComponent(resolvedValue)
+                      );
+                    } else {
+                      resolvedFileVariable[target].value = resolvedFileVariable[target].value.replace(
+                        args[i],
+                        resolvedValue
+                      );
+                    }
+                    resolvedIndex.push(i);
+                  }
+                }
+              }
+              if (resolvedIndex.length > 0) {
+                let removedCount = 0;
+                for (const removed of resolvedIndex) {
+                  args.splice(removed - removedCount, 2);
+                  removedCount += 2;
+                }
+              }
+              if (args.length < 2) {
+                // all dependency resolved
+                resolved.push(target);
+              }
+            }
+          }
+        }
+      }
+
+      for (const variable of variables) {
+        if (isArray(variable.args) && variable.args.length >= 2) {
+          let resolvedIndex = [];
+          for (let i = 0; i < variable.args.length - 1; i += 2) {
+            if (
+              isArray(variable.args[i + 1]) &&
+              variable.args[i + 1].length === 1 &&
+              !variable.args[i + 1][0].startsWith("$")
+            ) {
+              let referenceKey = variable.args[i + 1][0];
+              if (referenceKey.startsWith("%")) {
+                referenceKey = referenceKey.substring(1);
+              }
+              if (Object.hasOwnProperty.call(resolvedFileVariable, referenceKey)) {
+                if (variable.args[i + 1][0][0] === "%") {
+                  variable.value = variable.value.replace(
+                    variable.args[i],
+                    encodeURIComponent(resolvedFileVariable[referenceKey].value)
+                  );
+                } else {
+                  variable.value = variable.value.replace(variable.args[i], resolvedFileVariable[referenceKey].value);
+                }
+                resolvedIndex.push(i);
+              }
+            }
+          }
+          if (resolvedIndex.length > 0) {
+            let removedCount = 0;
+            for (const removed of resolvedIndex) {
+              variable.args.splice(removed - removedCount, 2);
+              removedCount += 2;
+            }
+          }
+        }
+      }
+    };
+
+    const setRequestVariable = (key, req) => {
+      requestVariable[key] = req;
+    };
+
+    return {
+      resolveFileVariable,
+      setRequestVariable,
+    };
+  })(exprs);
 
   return {
-    resolver,
-    process,
-    setSelection: settingVariable.setSelection,
-    setSetting: settingVariable.setSetting,
-    resetDotenv: dotenvVariable.resetDotenv,
-    setDotenv: dotenvVariable.setDotenv,
+    setSettingVariableSelection: settingVariable.setSelection,
+    setSettingVariable: settingVariable.setSetting,
+    resetDotenvVariable: dotenvVariable.resetDotenv,
+    setDotenvVariable: dotenvVariable.setDotenv,
+    resolveDynamicVariable,
+    resolveSettingVariable,
+    resolveFileVariable: documentVariable.resolveFileVariable,
+    setRequestVariable: documentVariable.setRequestVariable,
   };
 };
 

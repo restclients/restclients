@@ -173,3 +173,7 @@ exports.datetimeAdd = (datetime, offset, option) => {
       return;
   }
 };
+
+exports.isArray = (arr) => {
+  return arr && (arr instanceof Array || Array.isArray(arr));
+};

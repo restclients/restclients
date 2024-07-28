@@ -115,6 +115,19 @@ var tokenizer = function (type, line) {
     return end;
   };
 
+  let extractVarArgs = (start, end) => {
+    let args = [];
+    while (start <= end) {
+      let varStart = start;
+      start = nextBlank(start, end);
+      if (varStart < start) {
+        args.push(line.substring(varStart, start));
+        start = skipLeftBlank(start + 1, end);
+      }
+    }
+    return args;
+  };
+
   let extractVar = (start, end) => {
     let vars = [];
     while (start < end) {
@@ -130,7 +143,7 @@ var tokenizer = function (type, line) {
       let wStart = skipLeftBlank(varStart + 2, start - 1);
       if (!isBlank(wStart)) {
         vars.push(line.substring(varStart, start + 2));
-        vars.push(line.substring(wStart, skipRightBlank(wStart, start - 1) + 1));
+        vars.push(extractVarArgs(wStart, skipRightBlank(wStart, start - 1)));
       }
       start = start + 2;
     }
@@ -270,7 +283,14 @@ var tokenizer = function (type, line) {
                 // parse name key
                 start += metaTypeName.length + 1;
                 start = skipLeftBlank(start, end);
-
+                let varStart = start;
+                start = nextBlank(start, end);
+                if (varStart < start) {
+                  value.push(line.substring(varStart, start));
+                }
+                // parse name description
+                ++start;
+                start = skipLeftBlank(start, end);
                 if (start <= end) {
                   value.push(line.substring(start, end + 1));
                 }

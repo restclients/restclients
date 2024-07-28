@@ -178,12 +178,12 @@ describe("parser meta type name", function () {
 
   it("with aa description info", function () {
     const exprs = parser("# @name aa description info\n", true);
-    expect(exprs).toEqual([{ type: "meta", value: ["@name", "aa description info"] }]);
+    expect(exprs).toEqual([{ type: "meta", value: ["@name", "aa", "description info"] }]);
   });
 
   it("with   aa  description info ", function () {
     const exprs = parser("#   @name   aa  description info \n", true);
-    expect(exprs).toEqual([{ type: "meta", value: ["@name", "aa  description info"] }]);
+    expect(exprs).toEqual([{ type: "meta", value: ["@name", "aa", "description info"] }]);
   });
 
   it("with a", function () {
@@ -198,7 +198,7 @@ describe("parser meta type name", function () {
 
   it("// with   aa  description info ", function () {
     const exprs = parser("//   @name   aa  description info \n", true);
-    expect(exprs).toEqual([{ type: "meta", value: ["@name", "aa  description info"] }]);
+    expect(exprs).toEqual([{ type: "meta", value: ["@name", "aa", "description info"] }]);
   });
 
   it("// with a", function () {
@@ -419,7 +419,7 @@ describe("parser var type", function () {
   it("@host = {{hostname}}:{{port}}", function () {
     const exprs = parser("@host = {{hostname}}:{{port}}\n", true);
     expect(exprs).toEqual([
-      { type: "var", value: ["host", "{{hostname}}:{{port}}", ["{{hostname}}", "hostname", "{{port}}", "port"]] },
+      { type: "var", value: ["host", "{{hostname}}:{{port}}", ["{{hostname}}", ["hostname"], "{{port}}", ["port"]]] },
     ]);
   });
 
@@ -451,7 +451,10 @@ describe("parser var type", function () {
   it("@createdAt = {{$datetime iso8601}}", function () {
     const exprs = parser("@createdAt = {{$datetime iso8601}}\n", true);
     expect(exprs).toEqual([
-      { type: "var", value: ["createdAt", "{{$datetime iso8601}}", ["{{$datetime iso8601}}", "$datetime iso8601"]] },
+      {
+        type: "var",
+        value: ["createdAt", "{{$datetime iso8601}}", ["{{$datetime iso8601}}", ["$datetime", "iso8601"]]],
+      },
     ]);
   });
 
@@ -460,10 +463,21 @@ describe("parser var type", function () {
     expect(exprs).toEqual([
       {
         type: "var",
-        value: ["modifiedBy", "{{$processEnv USERNAME}}", ["{{$processEnv USERNAME}}", "$processEnv USERNAME"]],
+        value: ["modifiedBy", "{{$processEnv USERNAME}}", ["{{$processEnv USERNAME}}", ["$processEnv", "USERNAME"]]],
       },
     ]);
   });
+
+  it("@a = {{$a b}}", function () {
+    const exprs = parser("@a = {{$a b}}\n", true);
+    expect(exprs).toEqual([
+      {
+        type: "var",
+        value: ["a", "{{$a b}}", ["{{$a b}}", ["$a", "b"]]],
+      },
+    ]);
+  });
+  
 });
 
 describe("parser url type", function () {
