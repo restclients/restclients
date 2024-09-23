@@ -517,6 +517,15 @@ describe("parser url type", function () {
       { type: "url", value: ["&p=b"] },
     ]);
   });
+
+  it("http://example-{{env}}.com\n?q=a\n&p={{qQuery}}", function () {
+    const exprs = parser("http://example-{{env}}.com\n?q=a\n&p={{pQuery}}\n", true);
+    expect(exprs).toEqual([
+      { type: "url", value: ["GET", "http://example-{{env}}.com", ["{{env}}", ["env"]]] },
+      { type: "url", value: ["?q=a"] },
+      { type: "url", value: ["&p={{pQuery}}", ["{{pQuery}}", ["pQuery"]]] },
+    ]);
+  });
 });
 
 describe("parser header type", function () {

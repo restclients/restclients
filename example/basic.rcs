@@ -1,0 +1,18 @@
+# restclients file
+
+@hostname = test.example.com
+@port = 8633
+@host = {{hostname}}:{{port}}
+@contentType = application/json
+
+###
+# @prompt userId
+# @prompt email Your email address display on webpage
+# @prompt password Your password
+POST https://{{host}}/users/{{userId}} HTTP/1.1
+Content-Type: {{contentType}}
+
+{
+    "email": "{{email}}",
+    "password": "{{password}}"
+}

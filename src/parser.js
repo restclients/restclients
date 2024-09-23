@@ -55,6 +55,7 @@ const metaTypeNoRedirect = "@no-redirect";
 const metaTypeNoCookieJar = "@no-cookie-jar";
 const metaTypePrompt = "@prompt";
 const metaTypeComment = "@comment";
+const metaTypeCode = "@code";
 
 const errorCodes = {
   S010001: "Unprocessed text",
@@ -74,13 +75,21 @@ let create = function (type, value, error = null) {
 
 var tokenizer = function (type, line) {
   let isBlank = (char) => {
-    return char === " " || char === "\t" || char === "\r" || char === "\n" || char === "\f" || char === "\v";
+    return (
+      char === " " ||
+      char === "\t" ||
+      char === "\r" ||
+      char === "\n" ||
+      char === "\f" ||
+      char === "\v"
+    );
   };
 
   let isMetaType = (start, end, metaType) => {
     let len = metaType.length;
     return (
-      ((end - start > len - 1 && isBlank(line.charAt(start + len))) || end - start === len - 1) &&
+      ((end - start > len - 1 && isBlank(line.charAt(start + len))) ||
+        end - start === len - 1) &&
       line.substring(start, start + len).toLowerCase() === metaType
     );
   };
@@ -229,16 +238,26 @@ var tokenizer = function (type, line) {
           return parseBlankLine(type);
         }
 
-        if (line.charAt(start) === "#" && line.charAt(start + 1) === "#" && line.charAt(start + 2) === "#") {
+        if (
+          line.charAt(start) === "#" &&
+          line.charAt(start + 1) === "#" &&
+          line.charAt(start + 2) === "#"
+        ) {
           // start with ###, rest clients seperator
           // new request block
           type = seperatorType;
           start = skipLeftBlank(start + 3, end);
-          return create(type, start >= end + 1 ? [] : [line.substring(start, end + 1)]);
+          return create(
+            type,
+            start >= end + 1 ? [] : [line.substring(start, end + 1)]
+          );
         }
 
         if (type === seperatorType || type === metaType || type === varType) {
-          if (line.charAt(start) === "#" || (line.charAt(start) === "/" && line.charAt(start + 1) === "/")) {
+          if (
+            line.charAt(start) === "#" ||
+            (line.charAt(start) === "/" && line.charAt(start + 1) === "/")
+          ) {
             // meta line
             type = metaType;
 
@@ -316,6 +335,18 @@ var tokenizer = function (type, line) {
                   value.push(line.substring(start, end + 1));
                 }
                 return create(type, value);
+              } else if (isMetaType(start, end, metaTypeCode)) {
+                // meta code
+                let value = [metaTypeCode];
+                // parse code file path
+                start += metaTypeCode.length + 1;
+                start = skipLeftBlank(start, end);
+                let varStart = start;
+                start = nextBlank(start, end);
+                if (varStart < start) {
+                  value.push(line.substring(varStart, start));
+                }
+                return create(type, value);
               } else {
                 // meta comment
                 let value = [metaTypeComment, " "];
@@ -349,7 +380,8 @@ var tokenizer = function (type, line) {
                 // curl type
                 type = curlType;
                 start = skipLeftBlank(start, end);
-                let value = start <= end ? [line.substring(start, end + 1)] : [];
+                let value =
+                  start <= end ? [line.substring(start, end + 1)] : [];
                 let vars = extractVar(start, end + 1);
                 if (vars.length > 0) {
                   value.push(vars);
@@ -443,9 +475,6 @@ const parser = () => {
         exprs.push(expr);
         if (expr && !expr.error) {
           type = expr.type;
-          if (!recover) {
-            break;
-          }
         }
       } catch (error) {
         console.error(error);

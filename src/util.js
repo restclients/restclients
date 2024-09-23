@@ -4,7 +4,8 @@
  *   This project is licensed under the Apache 2 License, see LICENSE
  */
 
-// url
+const { sep, join, extname } = require("path");
+const { readdir, stat: astat, lstat } = require("fs");
 
 exports.isValidUrl = (url) => {
   try {
@@ -176,4 +177,79 @@ exports.datetimeAdd = (datetime, offset, option) => {
 
 exports.isArray = (arr) => {
   return arr && (arr instanceof Array || Array.isArray(arr));
+};
+
+exports.replacePosixSep = (pattern) => {
+  // yargs coerces positional args into numbers
+  const patternAsString = pattern.toString();
+  if (sep === "/") {
+    return patternAsString;
+  }
+  return patternAsString.replace(/\//g, "\\\\");
+};
+
+// copy from jest find
+exports.find = (roots, extensions, ignore, enableSymlinks, callback) => {
+  const result = [];
+  let activeCalls = 0;
+  function search(directory) {
+    activeCalls++;
+    readdir(
+      directory,
+      {
+        withFileTypes: true,
+      },
+      (err, entries) => {
+        activeCalls--;
+        if (err) {
+          if (activeCalls === 0) {
+            callback(result);
+          }
+          return;
+        }
+        entries.forEach((entry) => {
+          const file = join(directory, entry.name);
+          if (ignore(file)) {
+            return;
+          }
+          if (entry.isSymbolicLink()) {
+            return;
+          }
+          if (entry.isDirectory()) {
+            search(file);
+            return;
+          }
+          activeCalls++;
+          const stat = enableSymlinks ? astat : lstat;
+          stat(file, (err, stat) => {
+            activeCalls--;
+
+            // This logic is unnecessary for node > v10.10, but leaving it in
+            // since we need it for backwards-compatibility still.
+            if (!err && stat && !stat.isSymbolicLink()) {
+              if (stat.isDirectory()) {
+                search(file);
+              } else {
+                const ext = extname(file).substr(1);
+                if (extensions.indexOf(ext) !== -1) {
+                  result.push([file, stat.mtime.getTime(), stat.size]);
+                }
+              }
+            }
+            if (activeCalls === 0) {
+              callback(result);
+            }
+          });
+        });
+        if (activeCalls === 0) {
+          callback(result);
+        }
+      }
+    );
+  }
+  if (roots.length > 0) {
+    roots.forEach(search);
+  } else {
+    callback(result);
+  }
 };

@@ -185,6 +185,23 @@ const dotenvVariable = (() => {
 })();
 
 const variable = (exprs) => {
+  const resolvePromptVariable = async (promptVariables) => {
+    let prompt = {};
+    if (promptVariables.length > 0) {
+      const readlinePromise = require("node:readline/promises");
+      const { stdin: input, stdout: output } = require("node:process");
+      const rl = readlinePromise.createInterface({ input, output });
+
+      for (const item of promptVariables) {
+        console.log(item);
+        const input = await rl.question(`Input value for "${item[0]}"${item[1] ?? ` (${item[1]})`}`);
+        prompt[item[0]] = { value: input, args: null };
+      }
+      rl.close();
+    }
+    return prompt;
+  };
+
   const resolveSettingVariable = (key) => {
     // load from setting
     return { value: settingVariable.resolver(key) };
@@ -345,9 +362,9 @@ const variable = (exprs) => {
     }
     console.log(fileVariable, reference);
 
-    const resolveFileVariable = (variables) => {
+    const resolveFileVariable = (variables, resolvedFileVariable) => {
       const resolved = [];
-      const resolvedFileVariable = {};
+      resolvedFileVariable = resolvedFileVariable || {};
 
       const resolveFileVariableDependencies = (variable) => {
         let fileVariableDependencies = [];
@@ -594,6 +611,7 @@ const variable = (exprs) => {
     setSettingVariable: settingVariable.setSetting,
     resetDotenvVariable: dotenvVariable.resetDotenv,
     setDotenvVariable: dotenvVariable.setDotenv,
+    resolvePromptVariable,
     resolveDynamicVariable,
     resolveSettingVariable,
     resolveFileVariable: documentVariable.resolveFileVariable,
