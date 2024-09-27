@@ -1,5 +1,5 @@
 const { describe, expect, it } = require("@jest/globals");
-const { isValidUrl, datetimeAdd, datetimeFormat } = require("./util");
+const { isValidUrl, datetimeAdd, datetimeFormat, resolveFilePath, parseContentType, ContentType, getHeader } = require("./util");
 
 describe("isValidUrl", function () {
   it("example.com", function () {
@@ -141,5 +141,106 @@ describe("datetimeAdd", function () {
     let date = new Date("2024-06-30T12:09:33+08:00");
     datetimeAdd(date, -2, "ms");
     expect(date).toEqual(new Date("2024-06-30T12:09:32.998+08:00"));
+  });
+});
+
+describe("resolveFilePath", function () {
+  it("absolute path exist", function () {
+    expect(resolveFilePath("/", null, null)).toEqual("/");
+  });
+
+  it("absolute path not exist", function () {
+    expect(resolveFilePath("/tttt.t", null, null)).toBeUndefined();
+  });
+
+  it("relative path exist under rootDir", function () {
+    expect(resolveFilePath("./src/util.test.js", process.cwd(), null)).toBeDefined();
+  });
+
+  it("relative path not exist under rootDir", function () {
+    expect(resolveFilePath("./src/notExistUtil.test.js", process.cwd(), null)).toBeUndefined();
+  });
+
+  it("relative path exist with current file", function () {
+    expect(resolveFilePath("./util.test.js", process.cwd(), __filename)).toBeDefined();
+  });
+
+  it("relative path not exist with current file", function () {
+    expect(resolveFilePath("./notExistUtil.test.js", process.cwd(), __filename)).toBeUndefined();
+  });
+});
+
+describe("parseContentType", function () {
+  it("application/json", function () {
+    const contentType = parseContentType("application/json");
+    expect(contentType).toEqual([ContentType.JsonType, "application/json", "application", "json"]);
+  });
+  it("application/json; charset=utf-8", function () {
+    const contentType = parseContentType("application/json; charset=utf-8");
+    expect(contentType).toEqual([ContentType.JsonType, "application/json", "application", "json"]);
+  });
+  it("application/xml", function () {
+    const contentType = parseContentType("application/xml");
+    expect(contentType).toEqual([ContentType.XmlType, "application/xml", "application", "xml"]);
+  });
+  it("text/html", function () {
+    const contentType = parseContentType("text/html");
+    expect(contentType).toEqual([ContentType.HtmlType, "text/html", "text", "html"]);
+  });
+  it("application/javascript", function () {
+    const contentType = parseContentType("application/javascript");
+    expect(contentType).toEqual([ContentType.JavascriptType, "application/javascript", "application", "javascript"]);
+  });
+  it("text/css", function () {
+    const contentType = parseContentType("text/css");
+    expect(contentType).toEqual([ContentType.CssType, "text/css", "text", "css"]);
+  });
+  it("multipart/mixed", function () {
+    const contentType = parseContentType("multipart/mixed");
+    expect(contentType).toEqual([ContentType.MultipartMixedType, "multipart/mixed", "multipart", "mixed"]);
+  });
+  it("multipart/form-data", function () {
+    const contentType = parseContentType("multipart/form-data");
+    expect(contentType).toEqual([ContentType.MultipartFormDataType, "multipart/form-data", "multipart", "form-data"]);
+  });
+  it("application/x-www-form-urlencoded", function () {
+    const contentType = parseContentType("application/x-www-form-urlencoded");
+    expect(contentType).toEqual([
+      ContentType.FormUrlencodedType,
+      "application/x-www-form-urlencoded",
+      "application",
+      "x-www-form-urlencoded",
+    ]);
+  });
+  it("application/x-ndjson", function () {
+    const contentType = parseContentType("application/x-ndjson");
+    expect(contentType).toEqual([
+      ContentType.NewlineDelimitedJsonType,
+      "application/x-ndjson",
+      "application",
+      "x-ndjson",
+    ]);
+  });
+
+  it("image/png", function () {
+    const contentType = parseContentType("image/png");
+    expect(contentType).toEqual([ContentType.UnknownType, "image/png", "image", "png"]);
+  });
+});
+
+describe("getHeader", function () {
+  it("content-type found", function () {
+    const header = getHeader({"content-type": "application/json"}, "content-type");
+    expect(header).toEqual("application/json");
+  });
+
+  it("Content-Type found", function () {
+    const header = getHeader({"Content-Type": "application/json"}, "content-type");
+    expect(header).toEqual("application/json");
+  });
+
+  it("Content-Type not found", function () {
+    const header = getHeader({"Content-Type": "application/json"}, "contenttype");
+    expect(header).toBeUndefined();
   });
 });

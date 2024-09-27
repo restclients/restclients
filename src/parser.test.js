@@ -477,7 +477,6 @@ describe("parser var type", function () {
       },
     ]);
   });
-  
 });
 
 describe("parser url type", function () {
@@ -564,6 +563,32 @@ describe("parser body type", function () {
       { type: "header", value: ["User-Agent", "restclient"] },
       { type: "body", value: null },
       { type: "body", value: ["HELLO WORLD"] },
+    ]);
+  });
+
+  it("POST http://example.com/upload HTTP/1.1\nUser-Agent:restclient\nContent-Type:multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A\n", function () {
+    const exprs = parser(
+      'POST http://example.com/upload HTTP/1.1\nUser-Agent:restclient\nContent-Type:multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A\n\n------WebKitFormBoundaryM6cFocZWsx5Brf1A\nContent-Disposition: form-data; name="form"\n\ntest data\n------WebKitFormBoundaryM6cFocZWsx5Brf1A\nContent-Disposition: form-data; name="file"; filename="sample.txt"\nContent-Type: application/octet-stream\n\n\n------WebKitFormBoundaryM6cFocZWsx5Brf1A--',
+      true
+    );
+    expect(exprs).toEqual([
+      { type: "url", value: ["POST", "http://example.com/upload", "HTTP/1.1"] },
+      { type: "header", value: ["User-Agent", "restclient"] },
+      {
+        type: "header",
+        value: ["Content-Type", "multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A"],
+      },
+      { type: "body", value: null },
+      { type: "body", value: ["------WebKitFormBoundaryM6cFocZWsx5Brf1A"] },
+      { type: "body", value: ['Content-Disposition: form-data; name="form"'] },
+      { type: "body", value: null },
+      { type: "body", value: ["test data"] },
+      { type: "body", value: ["------WebKitFormBoundaryM6cFocZWsx5Brf1A"] },
+      { type: "body", value: ['Content-Disposition: form-data; name="file"; filename="sample.txt"'] },
+      { type: "body", value: ["Content-Type: application/octet-stream"] },
+      { type: "body", value: null },
+      { type: "body", value: null },
+      { type: "body", value: ["------WebKitFormBoundaryM6cFocZWsx5Brf1A--"] },
     ]);
   });
 });

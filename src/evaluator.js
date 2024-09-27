@@ -4,12 +4,15 @@
  *   This project is licensed under the Apache 2 License, see LICENSE
  */
 
-const { urlType, headerType, bodyType, metaTypePrompt, metaType } = require("./parser");
-const { isArray } = require("./util");
+const { EOL } = require("os");
+const { urlType, headerType, bodyType, metaTypePrompt, metaType, tokenizer } = require("./parser");
+const { isArray, getHeader, parseContentType, ContentType, resolveFilePath } = require("./util");
+const { readFileSync } = require("fs");
+const { URLSearchParams } = require("url");
 
 // evaluate stage
 // the purpose of evalutor is to add as much semantic value to the exprs as possible
-const evaluator = async function (exprs, vars) {
+const evaluator = async function (exprs, vars, option) {
   const req = {
     header: {},
     url: "",
@@ -86,6 +89,10 @@ const evaluator = async function (exprs, vars) {
                 bodies.push({ value: value });
               }
             }
+          } else {
+            if (lasExprType === bodyType) {
+              bodies.push({ value: null });
+            }
           }
           lasExprType = bodyType;
           break;
@@ -93,8 +100,8 @@ const evaluator = async function (exprs, vars) {
       }
     }
   });
+  const resolvedVariables = await vars.resolvePromptVariable(promptVariables);
   if (variables.length > 0) {
-    const resolvedVariables = await vars.resolvePromptVariable(promptVariables);
     vars.resolveFileVariable(variables, resolvedVariables);
   }
   for (const key of Object.keys(header)) {
@@ -102,9 +109,83 @@ const evaluator = async function (exprs, vars) {
       header[key] = header[key]["value"];
     }
   }
+
   req.header = header;
   req.url = urls.reduce((p, c) => p + c.value, "");
-  req.body = bodies.reduce((p, c) => p + c.value, "");
+  let host;
+  if ((host = getHeader(header, "Host")) !== undefined && req.url[0] === "/") {
+    let index;
+    const port = (index = host.indexOf(":")) > 0 ? host.slice(index + 1).trim() : "";
+    const scheme = port === "443" || port === "8443" ? "https" : "http";
+    req.url = `${scheme}://${host}${req.url}`;
+  }
+
+  var resolveFileContent = (line) => {
+    if (line.startsWith("<")) {
+      let i = line.indexOf(" ");
+      if (i > 0) {
+        const resolveVariable = line[1] === "@";
+        const encoding = (resolveVariable ? line.slice(2, i).trim() : line.slice(1, i).trim()) || "utf-8";
+        let filePath = line.slice(i + 1).trim();
+        if (
+          (filePath = resolveFilePath(filePath, option && option.rootDir, option && option.currentFilePath)) !==
+          undefined
+        ) {
+          const fileBuffer = readFileSync(filePath);
+          if (resolveVariable) {
+            const fileContent = fileBuffer.toString(encoding);
+            const { process } = tokenizer(bodyType, fileContent);
+            const expr = process();
+            if (expr.value && isArray(expr.value)) {
+              const value = expr.value[0];
+              const valueVars = expr.value[expr.value.length - 1];
+              if (typeof value === "string") {
+                if (isArray(valueVars) && valueVars.length > 0) {
+                  const content = { value: value, args: valueVars };
+                  vars.resolveFileVariable([content], resolvedVariables);
+                  return content.value;
+                }
+              }
+            }
+          }
+          return fileBuffer;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  var evaluateBody = (bodies, contentTypeHeader) => {
+    const [contentType] = parseContentType(contentTypeHeader) || [ContentType.UnknownType];
+    const buffers = [];
+    const lineEnd = contentType === ContentType.MultipartFormDataType ? "\r\n" : EOL;
+    for (let i = 0; i < bodies.length; ++i) {
+      let bodyContent;
+      if (typeof bodies[i].value === "string") {
+        if (bodies[i].value.startsWith("<") && (bodyContent = resolveFileContent(bodies[i].value)) !== undefined) {
+          buffers.push(typeof bodyContent === "string" ? Buffer.from(bodyContent) : bodyContent);
+        } else {
+          buffers.push(Buffer.from(bodies[i].value));
+        }
+      }
+      console.log(bodies[i]);
+      if (
+        (i !== bodies.length - 1 &&
+          !(contentType === ContentType.FormUrlencodedType && bodies[i + 1].value[0] === "&")) ||
+        contentType === ContentType.NewlineDelimitedJsonType
+      ) {
+        console.log("add new line");
+        buffers.push(Buffer.from(lineEnd));
+      }
+    }
+    const body = Buffer.concat(buffers);
+    if (contentType === ContentType.FormUrlencodedType) {
+      return new URLSearchParams(body.toString()).toString();
+    }
+    return body;
+  };
+
+  req.body = evaluateBody(bodies, getHeader(req.header, "content-type"));
   return req;
 };
 

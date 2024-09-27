@@ -1,3 +1,4 @@
+const { EOL } = require("os");
 const readlinePromise = require("node:readline/promises");
 const { describe, expect, it } = require("@jest/globals");
 const { executor } = require("./executor");
@@ -35,14 +36,15 @@ describe("executor", function () {
       rootDir: "./example",
       httpClient,
     });
+    const expectBody = Buffer.from(["{", '    "email": "stdin2",', '    "password": "stdin3"', "}"].join(EOL));
     expect(res[0][0].name).toEqual("");
     expect(res[0][0].range).toEqual([7, 17]);
     expect(res[0][0].url).toEqual("https://test.example.com:8633/users/stdin1");
     expect(res[0][0].header).toEqual({ "Content-Type": "application/json" });
-    expect(res[0][0].body).toEqual('{    "email": "stdin2",    "password": "stdin3"}');
+    expect(res[0][0].body).toEqual(expectBody);
     expect(httpClient).toHaveBeenCalledWith("https://test.example.com:8633/users/stdin1", {
       method: "POST",
-      body: '{    "email": "stdin2",    "password": "stdin3"}',
+      body: expectBody,
       headers: { "Content-Type": "application/json" },
     });
   });

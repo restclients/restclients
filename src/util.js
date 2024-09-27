@@ -4,8 +4,8 @@
  *   This project is licensed under the Apache 2 License, see LICENSE
  */
 
-const { sep, join, extname } = require("path");
-const { readdir, stat: astat, lstat } = require("fs");
+const { sep, join, extname, isAbsolute, dirname } = require("path");
+const { readdir, stat: astat, lstat, existsSync } = require("fs");
 
 exports.isValidUrl = (url) => {
   try {
@@ -252,4 +252,85 @@ exports.find = (roots, extensions, ignore, enableSymlinks, callback) => {
   } else {
     callback(result);
   }
+};
+
+exports.resolveFilePath = (path, rootDir, currentFilePath) => {
+  if (isAbsolute(path)) {
+    return existsSync(path) ? path : undefined;
+  }
+  if (rootDir) {
+    const absolutePath = join(rootDir, path);
+    if (existsSync(absolutePath)) {
+      return absolutePath;
+    }
+  }
+  if (currentFilePath) {
+    const absolutePath = join(dirname(currentFilePath), path);
+    if (existsSync(absolutePath)) {
+      return absolutePath;
+    }
+  }
+  return undefined;
+};
+
+exports.ContentType = {
+  UnknownType: 0,
+  JsonType: 1,
+  XmlType: 2,
+  HtmlType: 3,
+  JavascriptType: 4,
+  CssType: 5,
+  MultipartMixedType: 6,
+  MultipartFormDataType: 7,
+  FormUrlencodedType: 8,
+  NewlineDelimitedJsonType: 9,
+};
+
+exports.parseContentType = (contentType) => {
+  if (contentType) {
+    let i = contentType.indexOf(";");
+    if (i > 0) {
+      contentType = contentType.slice(0, i);
+    }
+    const essence = contentType.trim();
+    const [type, subtype] = essence.split("/");
+    if (
+      essence === "application/json" ||
+      essence === "text/json" ||
+      subtype.endsWith("+json") ||
+      subtype.startsWith("x-amz-json")
+    ) {
+      return [this.ContentType.JsonType, essence, type, subtype];
+    } else if (essence === "application/xml" || essence === "text/xml" || subtype.endsWith("+xml")) {
+      return [this.ContentType.XmlType, essence, type, subtype];
+    } else if (essence === "text/html") {
+      return [this.ContentType.HtmlType, essence, type, subtype];
+    } else if (essence === "application/javascript" || essence === "text/javascript") {
+      return [this.ContentType.JavascriptType, essence, type, subtype];
+    } else if (essence === "text/css") {
+      return [this.ContentType.CssType, essence, type, subtype];
+    } else if (essence === "multipart/mixed") {
+      return [this.ContentType.MultipartMixedType, essence, type, subtype];
+    } else if (essence === "multipart/form-data") {
+      return [this.ContentType.MultipartFormDataType, essence, type, subtype];
+    } else if (essence === "application/x-www-form-urlencoded") {
+      return [this.ContentType.FormUrlencodedType, essence, type, subtype];
+    } else if (essence === "application/x-ndjson") {
+      return [this.ContentType.NewlineDelimitedJsonType, essence, type, subtype];
+    } else {
+      return [this.ContentType.UnknownType, essence, type, subtype];
+    }
+  }
+};
+
+exports.getHeader = (headers, key) => {
+  if (headers && typeof headers === "object") {
+    key = key.toLocaleLowerCase();
+    for (const item of Object.entries(headers)) {
+      if (item[0].toLocaleLowerCase() === key) {
+        return item[1];
+      }
+    }
+  }
+  return undefined;
 };
