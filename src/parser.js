@@ -440,6 +440,21 @@ var tokenizer = function (type, line) {
         }
       } else {
         // body type
+        if (
+          line.charAt(start) === "#" &&
+          line.charAt(start + 1) === "#" &&
+          line.charAt(start + 2) === "#"
+        ) {
+          // start with ###, rest clients seperator
+          // new request block
+          type = seperatorType;
+          start = skipLeftBlank(start + 3, end);
+          return create(
+            type,
+            start >= end + 1 ? [] : [line.substring(start, end + 1)]
+          );
+        }
+        
         let value = [line];
         let vars = extractVar(start, end + 1);
         if (vars.length > 0) {

@@ -5,7 +5,7 @@
 @host = {{hostname}}:{{port}}
 @contentType = application/json
 
-###
+### basic
 # @prompt userId
 # @prompt email Your email address display on webpage
 # @prompt password Your password
@@ -16,3 +16,34 @@ Content-Type: {{contentType}}
     "email": "{{email}}",
     "password": "{{password}}"
 }
+
+### file body
+POST https://{{host}}/users/file HTTP/1.1
+Content-Type: application/octet-stream
+
+< ./sample.txt
+
+### url encode body
+@pass=data 111
+POST https://{{host}}/users/login HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+name=foo
+&password={{pass}}
+&option=id%26email
+
+### multipart form data body
+POST https://{{host}}/users/profile HTTP/1.1
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A
+
+------WebKitFormBoundaryM6cFocZWsx5Brf1A
+Content-Disposition: form-data; name="form"
+
+test data
+------WebKitFormBoundaryM6cFocZWsx5Brf1A
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: application/octet-stream
+
+
+< ./sample.txt
+------WebKitFormBoundaryM6cFocZWsx5Brf1A--

@@ -4,8 +4,9 @@
  *   This project is licensed under the Apache 2 License, see LICENSE
  */
 
-const { sep, join, extname, isAbsolute, dirname } = require("path");
+const { sep, join, extname, isAbsolute, dirname, basename } = require("path");
 const { readdir, stat: astat, lstat, existsSync } = require("fs");
+const { format } = require("util");
 
 exports.isValidUrl = (url) => {
   try {
@@ -334,3 +335,71 @@ exports.getHeader = (headers, key) => {
   }
   return undefined;
 };
+
+exports.logging = (() => {
+  const levels = ["trace", "debug", "info", "warn", "error"];
+  let logLevel = 2;
+  const shouldLogging = (level) => level >= logLevel;
+  const needStack = (level) => level <= 1;
+  const stackReg = /at\s+(.*)\s+\((.*):(\d*):(\d*)\)/i;
+  const stackReg2 = /at\s+()(.*):(\d*):(\d*)/i;
+  const log = (type, level, msg) => {
+    if (needStack(level)) {
+      // get call stack, and analyze it
+      // get all file,method and line number
+      var stacklist = new Error().stack.split("\n").slice(3);
+      var s = stacklist[0],
+        sp = stackReg.exec(s) || stackReg2.exec(s);
+      var stack = {};
+      if (sp && sp.length === 5) {
+        stack.path = sp[2];
+        stack.line = parseInt(sp[3]);
+      }
+      console[type](
+        format(
+          "%s %s %s:%s %s",
+          levels[level].toString().toUpperCase(),
+          new Date().toISOString(),
+          basename(stack.path),
+          stack.line,
+          msg
+        )
+      );
+    } else {
+      console[type](format("%s %s %s", levels[level].toString().toUpperCase(), new Date().toISOString(), msg));
+    }
+  };
+
+  return {
+    level: (level) => {
+      let l;
+      if ((l = levels.indexOf(level)) >= 0) {
+        logLevel = l;
+        log("debug", 1, "set log level " + level);
+      }
+    },
+    debug: (firstArg, ...rest) => {
+      if (shouldLogging(1)) {
+        log("debug", 1, format(firstArg, ...rest));
+      }
+    },
+    info: (firstArg, ...rest) => {
+      const level = 2;
+      if (shouldLogging(level)) {
+        log("info", level, format(firstArg, ...rest));
+      }
+    },
+    warn: (firstArg, ...rest) => {
+      const level = 3;
+      if (shouldLogging(level)) {
+        log("warn", level, format(firstArg, ...rest));
+      }
+    },
+    error: (firstArg, ...rest) => {
+      const level = 4;
+      if (shouldLogging(level)) {
+        log("error", level, format(firstArg, ...rest));
+      }
+    },
+  };
+})();

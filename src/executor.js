@@ -1,5 +1,5 @@
 const { resolve } = require("path");
-const { isArray, replacePosixSep, find } = require("./util");
+const { isArray, replacePosixSep, find, logging } = require("./util");
 const { readFileSync } = require("fs");
 const { variable } = require("./variable");
 const { parser, seperatorType } = require("./parser");
@@ -10,7 +10,7 @@ const executor = async function (option) {
     try {
       option.namePattern = new RegExp(option.namePattern, "i");
     } catch (err) {
-      console.log("Invalid name pattern", err);
+      logging.error("Invalid name pattern, %O", err);
       return;
     }
   }
@@ -18,7 +18,7 @@ const executor = async function (option) {
     try {
       option.filePattern = new RegExp([...option.filePattern].map(replacePosixSep).join("|"));
     } catch (err) {
-      console.log("Invalid file pattern", err);
+      logging.error("Invalid file pattern, %O", err);
       return;
     }
   }
@@ -45,6 +45,8 @@ const executor = async function (option) {
     return true;
   });
 
+  logging.debug("find files: %j", files);
+
   let runners = [];
   let maxWorker = 2;
   const result = [];
@@ -56,7 +58,7 @@ const executor = async function (option) {
     result.push(...(await Promise.all(runners)));
     runners = [];
   }
-  console.log(result);
+  logging.debug("all results: %j", result);
   return result;
 };
 
@@ -64,6 +66,7 @@ const generateWorker = (filename, option) => {
   return async () => {
     const content = readFileSync(filename, "utf-8");
     const exprs = parser()(content);
+    logging.debug("exprs: %j", exprs);
     const vars = variable(exprs);
     if (option.resolvePrompt) {
       vars.resolvePromptVariable = option.resolvePrompt;
@@ -77,24 +80,36 @@ const generateWorker = (filename, option) => {
         if (startIndex === -1) {
           startIndex = k;
         } else {
-          const req = await evaluator(exprs.slice(startIndex, k), vars);
-          req.name = isArray(exprs[startIndex].value) && exprs[startIndex].value[0];
-          if (!(option.namePattern && !option.namePattern.test(req.name))) {
+          const name = (isArray(exprs[startIndex].value) && exprs[startIndex].value[0]) || "";
+          if (!(option.namePattern && !option.namePattern.test(name))) {
+            const req = await evaluator(exprs.slice(startIndex, k), vars, {
+              rootDir: option.rootDir,
+              currentFilePath: filename,
+            });
+
+            req.name = name;
             req.range = [startIndex, k - 1];
-            req.fetch = await sendRequest(req, option);
+            req.res = await sendRequest(req, option);
             result.push(req);
+          } else {
+            logging.debug("skip %O by name pattern", name);
           }
           startIndex = k;
         }
       } else if (k === exprs.length - 1 && startIndex > -1) {
-        console.log(startIndex, k);
-        console.log(exprs);
-        const req = await evaluator(exprs.slice(startIndex, k + 1), vars);
-        req.name = (isArray(exprs[startIndex].value) && exprs[startIndex].value[0]) || "";
-        if (!(option.namePattern && !option.namePattern.test(req.name))) {
+        const name = (isArray(exprs[startIndex].value) && exprs[startIndex].value[0]) || "";
+        if (!(option.namePattern && !option.namePattern.test(name))) {
+          const req = await evaluator(exprs.slice(startIndex, k + 1), vars, {
+            rootDir: option.rootDir,
+            currentFilePath: filename,
+          });
+
+          req.name = name;
           req.range = [startIndex, k];
           req.fetch = await sendRequest(req, option);
           result.push(req);
+        } else {
+          logging.debug("skip %O by name pattern", name);
         }
       }
       ++k;
@@ -103,16 +118,48 @@ const generateWorker = (filename, option) => {
   };
 };
 
+const wrapDispatch = function (dispatch, body) {
+  const fn = async function (...args) {
+    const { path, origin, method, headers } = args[0] || {};
+    logging.info("request to %s %s%s", method, origin, path);
+    logging.info("request headers, %j", headers);
+    logging.info("request payload, %O", body || "NULL");
+    return dispatch.apply(this, args);
+  };
+  fn.isWrapped = true;
+  return fn;
+};
+
+const dispatcher = async function (body) {
+  let globalDispatcher = global[Symbol.for("undici.globalDispatcher.1")];
+  if (!globalDispatcher) {
+    try {
+      await fetch();
+    } catch (err) {
+      logging.debug("hook dispatcher, err: %O", err);
+    }
+    globalDispatcher = global[Symbol.for("undici.globalDispatcher.1")];
+  }
+  if (globalDispatcher && typeof globalDispatcher.dispatch === "function") {
+    if (!globalDispatcher.dispatch.isWrapped) {
+      globalDispatcher.dispatch = wrapDispatch(globalDispatcher.dispatch, body);
+    }
+    return globalDispatcher;
+  }
+  return undefined;
+};
+
 const sendRequest = async (req, option) => {
   try {
     const response = await option.httpClient(req.url, {
       method: req.method || "GET",
       body: req.body || undefined,
       headers: req.header || {},
+      dispatcher: await dispatcher(req.body),
     });
     return response;
   } catch (err) {
-    console.log(err);
+    logging.error("%s %s, error: %O", req.method, req.url, err);
     return err;
   }
 };

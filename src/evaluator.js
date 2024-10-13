@@ -100,6 +100,7 @@ const evaluator = async function (exprs, vars, option) {
       }
     }
   });
+
   const resolvedVariables = await vars.resolvePromptVariable(promptVariables);
   if (variables.length > 0) {
     vars.resolveFileVariable(variables, resolvedVariables);
@@ -159,22 +160,32 @@ const evaluator = async function (exprs, vars, option) {
     const [contentType] = parseContentType(contentTypeHeader) || [ContentType.UnknownType];
     const buffers = [];
     const lineEnd = contentType === ContentType.MultipartFormDataType ? "\r\n" : EOL;
-    for (let i = 0; i < bodies.length; ++i) {
+    let preNullBody = true;
+    // skip post null body lines
+    let length = bodies.length;
+    for (; length > 0; --length) {
+      if (bodies[length - 1].value !== null) {
+        break;
+      }
+    }
+    for (let i = 0; i < length; ++i) {
+      // skip pre null body lines
+      if (bodies[i].value === null && preNullBody) {
+        continue;
+      }
       let bodyContent;
       if (typeof bodies[i].value === "string") {
+        preNullBody = false;
         if (bodies[i].value.startsWith("<") && (bodyContent = resolveFileContent(bodies[i].value)) !== undefined) {
           buffers.push(typeof bodyContent === "string" ? Buffer.from(bodyContent) : bodyContent);
         } else {
           buffers.push(Buffer.from(bodies[i].value));
         }
       }
-      console.log(bodies[i]);
       if (
-        (i !== bodies.length - 1 &&
-          !(contentType === ContentType.FormUrlencodedType && bodies[i + 1].value[0] === "&")) ||
+        (i !== length - 1 && !(contentType === ContentType.FormUrlencodedType && bodies[i + 1].value[0] === "&")) ||
         contentType === ContentType.NewlineDelimitedJsonType
       ) {
-        console.log("add new line");
         buffers.push(Buffer.from(lineEnd));
       }
     }

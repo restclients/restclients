@@ -5,7 +5,7 @@
  */
 
 const { metaType, varType, metaTypeName } = require("./parser");
-const { datetimeAdd, datetimeFormat, isArray } = require("./util");
+const { datetimeAdd, datetimeFormat, isArray, logging } = require("./util");
 
 const timestamp = (offset, option) => {
   const date = new Date();
@@ -193,8 +193,7 @@ const variable = (exprs) => {
       const rl = readlinePromise.createInterface({ input, output });
 
       for (const item of promptVariables) {
-        console.log(item);
-        const input = await rl.question(`Input value for "${item[0]}"${item[1] ?? ` (${item[1]})`}`);
+        const input = await rl.question(`Input value for "${item[0]}"${`${item[1] ? ` (${item[1]})` : ""}`}\n`);
         prompt[item[0]] = { value: input, args: null };
       }
       rl.close();
@@ -360,7 +359,7 @@ const variable = (exprs) => {
         }
       }
     }
-    console.log(fileVariable, reference);
+    logging.debug("fileVariable: %j, reference %j", fileVariable, reference);
 
     const resolveFileVariable = (variables, resolvedFileVariable) => {
       const resolved = [];
@@ -461,7 +460,7 @@ const variable = (exprs) => {
         }
       }
 
-      console.log(resolvedFileVariable, resolved);
+      logging.debug("resolvedFileVariable: %j, resolved: %j", resolvedFileVariable, resolved);
 
       for (let key of Object.keys(resolvedFileVariable)) {
         let args = resolvedFileVariable[key].args;
@@ -511,7 +510,7 @@ const variable = (exprs) => {
         }
       }
 
-      console.log(resolvedFileVariable, resolved);
+      logging.debug("resolvedFileVariable: %j, resolved: %j", resolvedFileVariable, resolved);
 
       while (resolved.length > 0) {
         let resolvedKey = resolved.pop();
