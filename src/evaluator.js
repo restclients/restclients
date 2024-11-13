@@ -5,7 +5,7 @@
  */
 
 const { EOL } = require("os");
-const { urlType, headerType, bodyType, metaTypePrompt, metaType, tokenizer } = require("./parser");
+const { urlType, headerType, bodyType, metaTypePrompt, metaTypeScript, metaType, tokenizer } = require("./parser");
 const { isArray, getHeader, parseContentType, ContentType, resolveFilePath } = require("./util");
 const { readFileSync } = require("fs");
 const { URLSearchParams } = require("url");
@@ -22,6 +22,42 @@ const evaluator = async function (exprs, vars, option) {
   const bodies = [];
   const variables = [];
   const promptVariables = [];
+  let scriptContent;
+
+  var resolveFileContent = (line) => {
+    if (line.startsWith("<")) {
+      let i = line.indexOf(" ");
+      if (i > 0) {
+        const resolveVariable = line[1] === "@";
+        const encoding = (resolveVariable ? line.slice(2, i).trim() : line.slice(1, i).trim()) || "utf-8";
+        let filePath = line.slice(i + 1).trim();
+        if (
+          (filePath = resolveFilePath(filePath, option && option.rootDir, option && option.currentFilePath)) !==
+          undefined
+        ) {
+          const fileBuffer = readFileSync(filePath);
+          if (resolveVariable) {
+            const fileContent = fileBuffer.toString(encoding);
+            const { process } = tokenizer(bodyType, fileContent);
+            const expr = process();
+            if (expr.value && isArray(expr.value)) {
+              const value = expr.value[0];
+              const valueVars = expr.value[expr.value.length - 1];
+              if (typeof value === "string") {
+                if (isArray(valueVars) && valueVars.length > 0) {
+                  const content = { value: value, args: valueVars };
+                  vars.resolveFileVariable([content], resolvedVariable);
+                  return content.value;
+                }
+              }
+            }
+          }
+          return fileBuffer;
+        }
+      }
+    }
+    return undefined;
+  };
 
   let lasExprType = "";
   exprs.forEach((item) => {
@@ -31,6 +67,8 @@ const evaluator = async function (exprs, vars, option) {
           if (item.value && isArray(item.value)) {
             if (item.value[0] === metaTypePrompt) {
               promptVariables.push(item.value.slice(1));
+            } else if (item.value[0] === metaTypeScript) {
+              scriptContent = resolveFileContent("< " + item.value[1]);
             }
           }
           lasExprType = metaType;
@@ -101,9 +139,9 @@ const evaluator = async function (exprs, vars, option) {
     }
   });
 
-  const resolvedVariables = await vars.resolvePromptVariable(promptVariables);
+  const resolvedVariable = await vars.resolvePromptVariable(promptVariables);
   if (variables.length > 0) {
-    vars.resolveFileVariable(variables, resolvedVariables);
+    vars.resolveFileVariable(variables, resolvedVariable);
   }
   for (const key of Object.keys(header)) {
     if (header[key] instanceof Object && Object.hasOwnProperty.call(header[key], "value")) {
@@ -111,6 +149,7 @@ const evaluator = async function (exprs, vars, option) {
     }
   }
 
+  req.resolvedPromptVariable = resolvedVariable;
   req.header = header;
   req.url = urls.reduce((p, c) => p + c.value, "");
   let host;
@@ -120,41 +159,6 @@ const evaluator = async function (exprs, vars, option) {
     const scheme = port === "443" || port === "8443" ? "https" : "http";
     req.url = `${scheme}://${host}${req.url}`;
   }
-
-  var resolveFileContent = (line) => {
-    if (line.startsWith("<")) {
-      let i = line.indexOf(" ");
-      if (i > 0) {
-        const resolveVariable = line[1] === "@";
-        const encoding = (resolveVariable ? line.slice(2, i).trim() : line.slice(1, i).trim()) || "utf-8";
-        let filePath = line.slice(i + 1).trim();
-        if (
-          (filePath = resolveFilePath(filePath, option && option.rootDir, option && option.currentFilePath)) !==
-          undefined
-        ) {
-          const fileBuffer = readFileSync(filePath);
-          if (resolveVariable) {
-            const fileContent = fileBuffer.toString(encoding);
-            const { process } = tokenizer(bodyType, fileContent);
-            const expr = process();
-            if (expr.value && isArray(expr.value)) {
-              const value = expr.value[0];
-              const valueVars = expr.value[expr.value.length - 1];
-              if (typeof value === "string") {
-                if (isArray(valueVars) && valueVars.length > 0) {
-                  const content = { value: value, args: valueVars };
-                  vars.resolveFileVariable([content], resolvedVariables);
-                  return content.value;
-                }
-              }
-            }
-          }
-          return fileBuffer;
-        }
-      }
-    }
-    return undefined;
-  };
 
   var evaluateBody = (bodies, contentTypeHeader) => {
     const [contentType] = parseContentType(contentTypeHeader) || [ContentType.UnknownType];
@@ -193,10 +197,11 @@ const evaluator = async function (exprs, vars, option) {
     if (contentType === ContentType.FormUrlencodedType) {
       return new URLSearchParams(body.toString()).toString();
     }
-    return body;
+    return body.length > 0 ? body : null;
   };
 
   req.body = evaluateBody(bodies, getHeader(req.header, "content-type"));
+  req.scriptContent = scriptContent;
   return req;
 };
 

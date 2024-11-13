@@ -55,7 +55,7 @@ const metaTypeNoRedirect = "@no-redirect";
 const metaTypeNoCookieJar = "@no-cookie-jar";
 const metaTypePrompt = "@prompt";
 const metaTypeComment = "@comment";
-const metaTypeCode = "@code";
+const metaTypeScript = "@script";
 
 const errorCodes = {
   S010001: "Unprocessed text",
@@ -189,6 +189,8 @@ var tokenizer = function (type, line) {
   let parseBlankLine = (type) => {
     if (type === headerType || type === urlType || type === curlType) {
       type = bodyType;
+    } else if (type === seperatorType) {
+      type = metaType;
     }
     return create(type, null);
   };
@@ -335,11 +337,11 @@ var tokenizer = function (type, line) {
                   value.push(line.substring(start, end + 1));
                 }
                 return create(type, value);
-              } else if (isMetaType(start, end, metaTypeCode)) {
-                // meta code
-                let value = [metaTypeCode];
-                // parse code file path
-                start += metaTypeCode.length + 1;
+              } else if (isMetaType(start, end, metaTypeScript)) {
+                // meta script
+                let value = [metaTypeScript];
+                // parse script file path
+                start += metaTypeScript.length + 1;
                 start = skipLeftBlank(start, end);
                 let varStart = start;
                 start = nextBlank(start, end);
@@ -527,5 +529,6 @@ module.exports = {
   metaTypeNoCookieJar,
   metaTypePrompt,
   metaTypeComment,
+  metaTypeScript,
   errorCodes,
 };

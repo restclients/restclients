@@ -1,16 +1,30 @@
 const { resolve } = require("path");
-const { isArray, replacePosixSep, find, logging } = require("./util");
+const { Script, createContext } = require("vm");
+const {
+  isArray,
+  replacePosixSep,
+  find,
+  logging,
+  padding,
+  colorize,
+  parseContentType,
+  ContentType,
+  beautify,
+} = require("./util");
 const { readFileSync } = require("fs");
-const { variable } = require("./variable");
+const { variable, variableToContext } = require("./variable");
 const { parser, seperatorType } = require("./parser");
 const { evaluator } = require("./evaluator");
+const { format } = require("util");
+const { EOL } = require("os");
+const { pathToFileURL } = require("url");
 
 const executor = async function (option) {
   if (option.namePattern) {
     try {
       option.namePattern = new RegExp(option.namePattern, "i");
     } catch (err) {
-      logging.error("Invalid name pattern, %O", err);
+      logging.error("Invalid name pattern, %j", err);
       return;
     }
   }
@@ -18,7 +32,7 @@ const executor = async function (option) {
     try {
       option.filePattern = new RegExp([...option.filePattern].map(replacePosixSep).join("|"));
     } catch (err) {
-      logging.error("Invalid file pattern, %O", err);
+      logging.error("Invalid file pattern, %j", err);
       return;
     }
   }
@@ -62,6 +76,29 @@ const executor = async function (option) {
   return result;
 };
 
+const execute = async (req, exprs, vars, option) => {
+  Object.assign(
+    req,
+    await evaluator(exprs, vars, {
+      rootDir: option.rootDir,
+      currentFilePath: req.filename,
+    })
+  );
+
+  req.res = await sendRequest(req, option);
+  if (req.scriptContent) {
+    const script = new Script(req.scriptContent.toString());
+    script.runInContext(
+      createContext({
+        vars: variableToContext(vars, req.resolvePromptVariable),
+        request: req,
+        require,
+        logging,
+      })
+    );
+  }
+};
+
 const generateWorker = (filename, option) => {
   return async () => {
     const content = readFileSync(filename, "utf-8");
@@ -81,35 +118,37 @@ const generateWorker = (filename, option) => {
           startIndex = k;
         } else {
           const name = (isArray(exprs[startIndex].value) && exprs[startIndex].value[0]) || "";
+          const uri = `${pathToFileURL(filename)}#L${startIndex}-L${k - 1}`;
           if (!(option.namePattern && !option.namePattern.test(name))) {
-            const req = await evaluator(exprs.slice(startIndex, k), vars, {
-              rootDir: option.rootDir,
-              currentFilePath: filename,
-            });
-
-            req.name = name;
-            req.range = [startIndex, k - 1];
-            req.res = await sendRequest(req, option);
+            const req = {
+              filename: filename,
+              name: name,
+              range: [startIndex, k - 1],
+              uri,
+            };
+            logging.debug("execute request: %j", req);
+            await execute(req, exprs.slice(startIndex, k), vars, option);
             result.push(req);
           } else {
-            logging.debug("skip %O by name pattern", name);
+            logging.debug("skip %s %j by name pattern", uri, name);
           }
           startIndex = k;
         }
       } else if (k === exprs.length - 1 && startIndex > -1) {
         const name = (isArray(exprs[startIndex].value) && exprs[startIndex].value[0]) || "";
+        const uri = `${pathToFileURL(filename)}#L${startIndex}-L${k}`;
         if (!(option.namePattern && !option.namePattern.test(name))) {
-          const req = await evaluator(exprs.slice(startIndex, k + 1), vars, {
-            rootDir: option.rootDir,
-            currentFilePath: filename,
-          });
-
-          req.name = name;
-          req.range = [startIndex, k];
-          req.fetch = await sendRequest(req, option);
+          const req = {
+            filename: filename,
+            name: name,
+            range: [startIndex, k],
+            uri,
+          };
+          logging.debug("execute request: %j", req);
+          await execute(req, exprs.slice(startIndex, k + 1), vars, option);
           result.push(req);
         } else {
-          logging.debug("skip %O by name pattern", name);
+          logging.debug("skip %s %j by name pattern", uri, name);
         }
       }
       ++k;
@@ -118,49 +157,137 @@ const generateWorker = (filename, option) => {
   };
 };
 
-const wrapDispatch = function (dispatch, body) {
+const wrapDispatch = function (dispatch, request) {
   const fn = async function (...args) {
     const { path, origin, method, headers } = args[0] || {};
-    logging.info("request to %s %s%s", method, origin, path);
-    logging.info("request headers, %j", headers);
-    logging.info("request payload, %O", body || "NULL");
+    logging.debug("request to %s %s%s", method, origin, path);
+    logging.debug("request headers, %j", headers);
+    logging.debug("request payload, %j", request.body || "NULL");
+    request.method = method;
+    request.origin = origin;
+    request.path = path;
+    request.headers = new Headers();
+    for (const [key, value] of Object.entries(headers)) {
+      request.headers.append(key, value);
+    }
     return dispatch.apply(this, args);
   };
-  fn.isWrapped = true;
   return fn;
 };
 
-const dispatcher = async function (body) {
+const dispatcher = async function (request) {
   let globalDispatcher = global[Symbol.for("undici.globalDispatcher.1")];
   if (!globalDispatcher) {
     try {
       await fetch();
-    } catch (err) {
-      logging.debug("hook dispatcher, err: %O", err);
+    } catch {
+      // logging.debug("hook dispatcher, err: %j", err);
     }
     globalDispatcher = global[Symbol.for("undici.globalDispatcher.1")];
   }
   if (globalDispatcher && typeof globalDispatcher.dispatch === "function") {
-    if (!globalDispatcher.dispatch.isWrapped) {
-      globalDispatcher.dispatch = wrapDispatch(globalDispatcher.dispatch, body);
-    }
-    return globalDispatcher;
+    return new Proxy(globalDispatcher, {
+      get: (target, key) => (key === "dispatch" ? wrapDispatch(globalDispatcher.dispatch, request) : target[key]),
+    });
   }
   return undefined;
 };
 
+const prettyBody = (body, contentTypeHeader) => {
+  const [contentType] = parseContentType(contentTypeHeader) || [ContentType.UnknownType];
+  if (contentType === ContentType.JsonType) {
+    return beautify.json(body);
+  } else if (contentType === ContentType.XmlType) {
+    return beautify.xml(body);
+  } else {
+    try {
+      JSON.parse(body);
+      return beautify.json(body);
+    } catch {
+      return body;
+    }
+  }
+};
+
 const sendRequest = async (req, option) => {
+  let request = { body: req.body };
+  let rows = [];
+  const width = process.stdout.columns;
+  const keyWidth = 50;
   try {
+    const time = performance.now();
     const response = await option.httpClient(req.url, {
       method: req.method || "GET",
       body: req.body || undefined,
       headers: req.header || {},
-      dispatcher: await dispatcher(req.body),
+      dispatcher: await dispatcher(request),
     });
-    return response;
+    const duration = performance.now() - time;
+    req.time =
+      duration >= 1000
+        ? `${Math.floor(duration / 1000)}.${Math.floor(duration % 1000)} s`
+        : `${Math.floor(duration % 1000)} ms`;
+
+    const statusCode = response.status;
+    const headers = {};
+    response.headers.forEach((value, name) => {
+      headers[name] = value;
+    });
+
+    const body = Buffer.from(await response.arrayBuffer());
+
+    logging.debug("response statusCode: %s", statusCode);
+    logging.debug("response headers: %j", headers);
+    logging.debug("response body: %j", body);
+
+    rows.push(colorize.cyan(padding(`-----General-----`, "-", width)));
+    rows.push(`${padding("Request URL:", " ", keyWidth)}${request.origin}${request.path}`);
+    rows.push(`${padding("Request Method:", " ", keyWidth)}${request.method}`);
+    rows.push(
+      `${padding("Status Code:", " ", keyWidth)}${
+        statusCode >= 400 ? "\u{1F534}" : statusCode >= 300 ? "\u{1F7E1}" : "\u{1F7E2}"
+      } ${statusCode} ${response.statusText}`
+    );
+    rows.push(`${padding("Request Time:", " ", keyWidth)}${req.time}`);
+    rows.push(colorize.cyan(padding("-----Request Headers-----", "-", width)));
+    request.headers &&
+      request.headers.forEach((value, name) => {
+        rows.push(`${padding(name + ": ", " ", keyWidth)}${value}`);
+      });
+    rows.push(colorize.cyan(padding("-----Request Payload-----", "-", width)));
+    rows.push(request.body && request.body.toString());
+
+    rows.push(colorize.blue(padding("-----Response Headers-----", "-", width)));
+    response.headers.forEach((value, name) => {
+      rows.push(`${padding(name + ": ", " ", keyWidth)}${value}`);
+    });
+    rows.push(colorize.blue(padding("-----Response Body Preview-----", "-", width)));
+    rows.push(prettyBody(body.toString(), response.headers.get("content-type")));
+    rows.push(colorize.blue(padding("-----Response Body Raw-----", "-", width)));
+    rows.push(format("%j", body));
+
+    const res = {
+      statusCode: statusCode,
+      headers,
+      body: body,
+    };
+    return res;
   } catch (err) {
     logging.error("%s %s, error: %O", req.method, req.url, err);
-    return err;
+    if (rows.length === 0) {
+      rows.push(colorize.cyan(padding("-----General-----", "-", width)));
+      rows.push(`${padding("Request URL:", " ", keyWidth)}${request.origin}${request.path}`);
+      rows.push(`${padding("Request Method:", " ", keyWidth)}${request.method}`);
+      rows.push(colorize.cyan(padding("-----Request Headers-----", "-", width)));
+      request.headers.forEach((value, name) => {
+        rows.push(`${padding(name + ": ", " ", keyWidth)}${value}`);
+      });
+    }
+    return {
+      error: err,
+    };
+  } finally {
+    logging.info("Restclients Summary for Request %j\n%s", req.name, rows.join(EOL));
   }
 };
 

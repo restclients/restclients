@@ -179,6 +179,31 @@ describe("evaluator", function () {
     expect(req.body).toEqual(Buffer.from("This is a line\nThis is a line with variable {{ a }}"));
   });
 
+  it("header url body with script", async () => {
+    const exprs = [
+      { type: "var", value: ["b", "cccc", []] },
+      { type: "var", value: ["a", " {{b}} ", ["{{b}}", ["b"]]] },
+      { type: "meta", value: ["@script", "./basic.js"] },
+      {
+        type: "url",
+        value: ["POST", "http://example.com/test/{{a}}/{{aa}}", ["{{a}}", ["a"], "{{aa}}", ["aa"]]],
+      },
+      { type: "url", value: ["?q={{b}}", ["{{b}}", ["b"]]] },
+      { type: "url", value: ["&p={{c}}", ["{{c}}", ["c"]]] },
+      {
+        type: "header",
+        value: ["User-Agent", "restclient {{e}}", ["{{e}}", ["e"]]],
+      },
+      { type: "body", value: null },
+    ];
+    const vars = variable(exprs);
+    const req = await evaluator(exprs, vars, { rootDir: join(__dirname, "../example"), currentFilePath: __filename });
+    expect(req.method).toEqual("POST");
+    expect(req.url).toEqual("http://example.com/test/ cccc /{{aa}}?q=cccc&p={{c}}");
+    expect(req.header).toEqual({ "User-Agent": "restclient {{e}}" });
+    expect(req.scriptContent.toString()).toContain('  logging.info("script start");');
+  });
+
   it("header url body with file body not found", async () => {
     const exprs = [
       { type: "var", value: ["b", "cccc", []] },

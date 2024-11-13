@@ -47,3 +47,12 @@ Content-Type: application/octet-stream
 
 < ./sample.txt
 ------WebKitFormBoundaryM6cFocZWsx5Brf1A--
+
+### get posts
+
+# @script ./basic.js
+GET https://jsonplaceholder.typicode.com/posts/1
+
+### get posts next
+
+GET https://jsonplaceholder.typicode.com/{{postsPath}}/{{postsId}}

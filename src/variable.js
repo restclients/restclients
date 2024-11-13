@@ -99,10 +99,17 @@ const settingVariable = (() => {
       setSetting(currentSetting);
     }
   };
+  const addSettingVariable = (key, value) => {
+    if (Object.hasOwnProperty.call(availableSetting, key)) {
+      logging.warn("overwrite setting variable, key: %s, value: %s, newValue: %s", key, availableSetting[key], value);
+    }
+    availableSetting[key] = value;
+  };
   return {
     resolver,
     setSetting,
     setSelection,
+    addSettingVariable,
   };
 })();
 
@@ -599,15 +606,24 @@ const variable = (exprs) => {
       requestVariable[key] = req;
     };
 
+    const addFileVariable = (key, value) => {
+      if (Object.hasOwnProperty.call(fileVariable, key)) {
+        logging.warn("overwrite file variable, key: %s, value: %s, newValue: %s", key, fileVariable[key], value);
+      }
+      fileVariable[key] = { value: value, args: null };
+    };
+
     return {
       resolveFileVariable,
       setRequestVariable,
+      addFileVariable,
     };
   })(exprs);
 
   return {
     setSettingVariableSelection: settingVariable.setSelection,
     setSettingVariable: settingVariable.setSetting,
+    addSettingVariable: settingVariable.addSettingVariable,
     resetDotenvVariable: dotenvVariable.resetDotenv,
     setDotenvVariable: dotenvVariable.setDotenv,
     resolvePromptVariable,
@@ -615,11 +631,30 @@ const variable = (exprs) => {
     resolveSettingVariable,
     resolveFileVariable: documentVariable.resolveFileVariable,
     setRequestVariable: documentVariable.setRequestVariable,
+    addFileVariable: documentVariable.addFileVariable,
+  };
+};
+
+const variableToContext = (vars, resolvedVariables) => {
+  return {
+    addSettingVariable: vars.addSettingVariable,
+    addFileVariable: vars.addFileVariable,
+    resolveFileVariables: (args) => {
+      const variables = (isArray(args[0]) ? args[0] : args).map((arg) => {
+        return {
+          value: `{{${arg}}}`,
+          args: [`{{${arg}}}`, [`${arg}`]],
+        };
+      });
+      vars.resolveFileVariable(variables, resolvedVariables);
+      return variables.map((variable) => variable.value);
+    },
   };
 };
 
 module.exports = {
   variable,
+  variableToContext,
 };
 // setting env  ($shared, env...)
 // local env file (same folder .env file)

@@ -15,22 +15,22 @@ describe("parser blank line", function () {
 
   it("with\n", function () {
     const exprs = parser("\n", true);
-    expect(exprs).toEqual([{ type: "seperator", value: null }]);
+    expect(exprs).toEqual([{ type: "meta", value: null }]);
   });
 
   it("with\t", function () {
     const exprs = parser("\t", true);
-    expect(exprs).toEqual([{ type: "seperator", value: null }]);
+    expect(exprs).toEqual([{ type: "meta", value: null }]);
   });
 
   it("with   ", function () {
     const exprs = parser("   ", true);
-    expect(exprs).toEqual([{ type: "seperator", value: null }]);
+    expect(exprs).toEqual([{ type: "meta", value: null }]);
   });
 
   it("with  \t ", function () {
     const exprs = parser("  \t ", true);
-    expect(exprs).toEqual([{ type: "seperator", value: null }]);
+    expect(exprs).toEqual([{ type: "meta", value: null }]);
   });
 });
 
@@ -360,6 +360,38 @@ describe("parser meta type comment", function () {
   it("// with   aa  description info ", function () {
     const exprs = parser("//   aa  description info \n", true);
     expect(exprs).toEqual([{ type: "meta", value: ["@comment", " ", "aa  description info"] }]);
+  });
+});
+
+describe("parser meta type script", function () {
+  it("with", function () {
+    const exprs = parser("# @script\n", true);
+    expect(exprs).toEqual([{ type: "meta", value: ["@script"] }]);
+  });
+
+  it("with     ", function () {
+    const exprs = parser("# @script     \n", true);
+    expect(exprs).toEqual([{ type: "meta", value: ["@script"] }]);
+  });
+
+  it("with aa", function () {
+    const exprs = parser("# @script aa\n", true);
+    expect(exprs).toEqual([{ type: "meta", value: ["@script", "aa"] }]);
+  });
+
+  it("with ./a.js", function () {
+    const exprs = parser("# @script ./a.js\n", true);
+    expect(exprs).toEqual([{ type: "meta", value: ["@script", "./a.js"] }]);
+  });
+
+  it("// with", function () {
+    const exprs = parser("// @script\n", true);
+    expect(exprs).toEqual([{ type: "meta", value: ["@script"] }]);
+  });
+
+  it("// with ./a.js", function () {
+    const exprs = parser("// @script ./a.js\n", true);
+    expect(exprs).toEqual([{ type: "meta", value: ["@script", "./a.js"] }]);
   });
 });
 

@@ -1,5 +1,14 @@
 const { describe, expect, it } = require("@jest/globals");
-const { isValidUrl, datetimeAdd, datetimeFormat, resolveFilePath, parseContentType, ContentType, getHeader } = require("./util");
+const {
+  isValidUrl,
+  datetimeAdd,
+  datetimeFormat,
+  resolveFilePath,
+  parseContentType,
+  ContentType,
+  getHeader,
+  beautify,
+} = require("./util");
 
 describe("isValidUrl", function () {
   it("example.com", function () {
@@ -230,17 +239,33 @@ describe("parseContentType", function () {
 
 describe("getHeader", function () {
   it("content-type found", function () {
-    const header = getHeader({"content-type": "application/json"}, "content-type");
+    const header = getHeader({ "content-type": "application/json" }, "content-type");
     expect(header).toEqual("application/json");
   });
 
   it("Content-Type found", function () {
-    const header = getHeader({"Content-Type": "application/json"}, "content-type");
+    const header = getHeader({ "Content-Type": "application/json" }, "content-type");
     expect(header).toEqual("application/json");
   });
 
   it("Content-Type not found", function () {
-    const header = getHeader({"Content-Type": "application/json"}, "contenttype");
+    const header = getHeader({ "Content-Type": "application/json" }, "contenttype");
     expect(header).toBeUndefined();
+  });
+});
+
+describe("beautify", function () {
+  describe("json", function () {
+    it("hello world", function () {
+      const beautified = beautify.json("{'text': 'hello world!'}");
+      expect(beautified).toEqual("{\n\t'text': 'hello world!'\n}");
+    });
+  });
+
+  describe("xml", function () {
+    it("xml sample", function () {
+      const beautified = beautify.xml("<a>This is a sample</a><b>This is a second element</b>");
+      expect(beautified).toEqual("<a>\n\tThis is a sample\n</a>\n<b>\n\tThis is a second element\n</b>");
+    });
   });
 });

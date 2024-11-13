@@ -3,15 +3,6 @@ const readlinePromise = require("node:readline/promises");
 const { describe, expect, it, beforeEach, afterAll } = require("@jest/globals");
 const { executor } = require("./executor");
 
-/*
-  it("GET https://jsonplaceholder.typicode.com/posts/1", async function () {
-    const res = await executor({
-      url: "https://jsonplaceholder.typicode.com/posts/1",
-    });
-    expect(res.status).toEqual(200);
-  });
-  */
-
 describe("executor", function () {
   beforeEach(() => {
     const mockedDate = new Date("2024-06-30T12:09:33+08:00");
@@ -31,7 +22,7 @@ describe("executor", function () {
   });
 
   it("execute example basic", async function () {
-    const httpClient = jest.fn();
+    const httpClient = jest.fn().mockReturnValue(new Response());
     const res = await executor({
       rootDir: "./example",
       httpClient,
@@ -51,7 +42,7 @@ describe("executor", function () {
   });
 
   it("execute example file body", async function () {
-    const httpClient = jest.fn();
+    const httpClient = jest.fn().mockReturnValue(new Response());
     const res = await executor({
       rootDir: "./example",
       httpClient,
@@ -71,7 +62,7 @@ describe("executor", function () {
   });
 
   it("execute example url encode body", async function () {
-    const httpClient = jest.fn();
+    const httpClient = jest.fn().mockReturnValue(new Response());
     const res = await executor({
       rootDir: "./example",
       httpClient,
@@ -91,7 +82,7 @@ describe("executor", function () {
   });
 
   it("execute example multipart form data body", async function () {
-    const httpClient = jest.fn();
+    const httpClient = jest.fn().mockReturnValue(new Response());
     const res = await executor({
       rootDir: "./example",
       httpClient,
@@ -101,7 +92,7 @@ describe("executor", function () {
       '------WebKitFormBoundaryM6cFocZWsx5Brf1A\r\nContent-Disposition: form-data; name="form"\r\n\r\ntest data\r\n------WebKitFormBoundaryM6cFocZWsx5Brf1A\r\nContent-Disposition: form-data; name="file"; filename="sample.txt"\r\nContent-Type: application/octet-stream\r\n\r\n\r\nThis is a line\nThis is a line with variable {{ a }}\r\n------WebKitFormBoundaryM6cFocZWsx5Brf1A--'
     );
     expect(res[0][0].name).toEqual("multipart form data body");
-    expect(res[0][0].range).toEqual([34, 48]);
+    expect(res[0][0].range).toEqual([34, 49]);
     expect(res[0][0].url).toEqual("https://test.example.com:8633/users/profile");
     expect(res[0][0].header).toEqual({ "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A" });
     expect(res[0][0].body).toEqual(expectBody);

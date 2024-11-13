@@ -7,6 +7,7 @@
 const { sep, join, extname, isAbsolute, dirname, basename } = require("path");
 const { readdir, stat: astat, lstat, existsSync } = require("fs");
 const { format } = require("util");
+const { EOL } = require("os");
 
 exports.isValidUrl = (url) => {
   try {
@@ -403,3 +404,278 @@ exports.logging = (() => {
     },
   };
 })();
+
+exports.padding = (str, padder, width) => {
+  function visibleLength(input) {
+    /* eslint-disable-next-line no-control-regex */
+    const regex = new RegExp("[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PRZcf-nqry=><]", "g");
+    return Array.from(input.replace(regex, "")).length;
+  }
+  let paddingCount = width - visibleLength(str);
+  if (paddingCount > 0) {
+    return `${str}${padder.repeat(paddingCount)}`;
+  } else {
+    return str;
+  }
+};
+
+exports.colorize = (() => {
+  let format = (open, close) => {
+    return (str) => {
+      return `${open}${str.replaceAll(close, open)}${close}`;
+    };
+  };
+  return {
+    red: format("\x1b[31m", "\x1b[39m"),
+    green: format("\x1b[32m", "\x1b[39m"),
+    blue: format("\x1b[34m", "\x1b[39m"),
+    cyan: format("\x1b[36m", "\x1b[39m"),
+  };
+})();
+
+exports.beautify = {
+  json: (jstring, indent = "\t", linebreak = EOL) => {
+    const MODE = {
+      START: "open",
+      BETWEEN: "between",
+      END: "end",
+      STRING_SINGLE: "string_single",
+      STRING_DOUBLE: "string_double",
+      ESCAPE_IN_SINGLE: "escape_in_single",
+      ESCAPE_IN_DOUBLE: "escape_in_double",
+    };
+
+    const HIERARCHY = {
+      OBJECT: "object",
+      ARRAY: "array",
+    };
+
+    const HierarchyByToken = {
+      "[": HIERARCHY.Array,
+      "]": HIERARCHY.Array,
+      "{": HIERARCHY.OBJECT,
+      "}": HIERARCHY.OBJECT,
+    };
+
+    function createIndents(indent, n) {
+      if (!indent) {
+        return "";
+      }
+      return indent.repeat(n);
+    }
+
+    if (!jstring) {
+      return "";
+    }
+
+    let input = jstring.trim();
+    let output = "";
+    let hierarchyStack = [];
+
+    let mode = MODE.START;
+    let new_line = linebreak || "";
+    let depth = 0;
+
+    for (let i = 0; i < input.length; i++) {
+      let ch = input[i];
+
+      switch (mode) {
+        case MODE.START:
+          switch (ch) {
+            case "{":
+            case "[":
+              mode = MODE.BETWEEN;
+              i--;
+              break;
+            case " ":
+            case "\t":
+            case "\n":
+              break;
+            default:
+              throw new Error("Invalid json string.");
+          }
+          break;
+
+        case MODE.BETWEEN:
+          switch (ch) {
+            case "{":
+            case "[":
+              output += ch + new_line;
+              depth++;
+              hierarchyStack.push(HierarchyByToken[ch]);
+              output += createIndents(indent, depth);
+              break;
+            case "}":
+            case "]":
+              output += new_line;
+              depth--;
+              output += createIndents(indent, depth) + ch;
+              if (hierarchyStack.pop() !== HierarchyByToken[ch]) {
+                throw new Error("Invalid json string.");
+              }
+              if (depth === 0) {
+                mode = MODE.END;
+              }
+              break;
+            case ",":
+              output += ch + new_line;
+              output += createIndents(indent, depth);
+              break;
+            case ":":
+              output += ch + " ";
+              break;
+            case "'":
+              output += ch;
+              mode = MODE.STRING_SINGLE;
+              break;
+            case '"':
+              output += ch;
+              mode = MODE.STRING_DOUBLE;
+              break;
+            case " ":
+            case "\n":
+            case "\t":
+            case "\r":
+              break;
+            default:
+              output += ch;
+              break;
+          }
+          break;
+
+        case MODE.END:
+          switch (ch) {
+            case " ":
+            case "\t":
+            case "\n":
+            case "\r":
+              break;
+            default:
+              throw new Error("Invalid json string.");
+          }
+          break;
+
+        case MODE.STRING_SINGLE:
+          output += ch;
+          switch (ch) {
+            case "'":
+              mode = MODE.BETWEEN;
+              break;
+            case "\\":
+              mode = MODE.ESCAPE_IN_SINGLE;
+              break;
+          }
+          break;
+
+        case MODE.STRING_DOUBLE:
+          output += ch;
+          switch (ch) {
+            case '"':
+              mode = MODE.BETWEEN;
+              break;
+            case "\\":
+              mode = MODE.ESCAPE_IN_DOUBLE;
+              break;
+          }
+          break;
+
+        case MODE.ESCAPE_IN_SINGLE:
+          output += ch;
+          mode = MODE.STRING_SINGLE;
+          break;
+
+        case MODE.ESCAPE_IN_DOUBLE:
+          output += ch;
+          mode = MODE.STRING_DOUBLE;
+          break;
+      }
+    }
+
+    if (depth !== 0) {
+      throw new Error("Invalid json string.");
+    }
+    return output;
+  },
+  xml: (xmlStr, indentStr = "\t", linebreak = EOL) => {
+    function parse(xmlStr) {
+      var opener = /<(\w+)[^>]*?>/m,
+        closer = /<\/[^>]*>/m;
+
+      var idx = 0,
+        indent = 0,
+        processing = "",
+        tags = [],
+        output = [],
+        token;
+
+      while (idx < xmlStr.length) {
+        processing += xmlStr[idx];
+
+        if ((token = getToken(opener, processing))) {
+          // Check if it is a singular element, e.g. <link />
+          if (processing[processing.length - 2] != "/") {
+            addLine(output, token.preContent, indent);
+            addLine(output, token.match, indent);
+
+            tags.push(token.tag);
+            indent += 1;
+            processing = "";
+          } else {
+            addLine(output, token.preContent, indent);
+            addLine(output, token.match, indent);
+            processing = "";
+          }
+        } else if ((token = getToken(closer, processing))) {
+          addLine(output, token.preContent, indent);
+
+          if (tags[tags.length] == token.tag) {
+            tags.pop();
+            indent -= 1;
+          }
+
+          addLine(output, token.match, indent);
+          processing = "";
+        }
+
+        idx += 1;
+      }
+
+      if (tags.length) {
+        exports.logging.warn(
+          "xmlFile may be malformed. Not all opening tags were closed. Following tags were left open: %j", tags
+        );
+      }
+
+      return output;
+    }
+
+    function getToken(regex, str) {
+      if (regex.test(str)) {
+        var matches = regex.exec(str);
+        var match = matches[0];
+        var offset = str.length - match.length;
+        var preContent = str.substring(0, offset);
+
+        return {
+          match: match,
+          tag: matches[1],
+          offset: offset,
+          preContent: preContent,
+        };
+      }
+    }
+
+    function addLine(output, content, indent) {
+      // Trim the content
+      if ((content = content.replace(/^\s+|\s+$/, ""))) {
+        var tabs = "";
+
+        while (indent--) {
+          tabs += indentStr;
+        }
+        output.push(tabs + content);
+      }
+    }
+    return parse(xmlStr).join(linebreak);
+  },
+};
