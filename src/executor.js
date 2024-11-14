@@ -1,4 +1,4 @@
-const { resolve } = require("path");
+const { resolve, join } = require("path");
 const { Script, createContext } = require("vm");
 const {
   isArray,
@@ -11,7 +11,7 @@ const {
   ContentType,
   beautify,
 } = require("./util");
-const { readFileSync } = require("fs");
+const { readFileSync, existsSync } = require("fs");
 const { variable, variableToContext } = require("./variable");
 const { parser, seperatorType } = require("./parser");
 const { evaluator } = require("./evaluator");
@@ -36,7 +36,26 @@ const executor = async function (option) {
       return;
     }
   }
+
   option.rootDir = option.rootDir ? resolve(process.cwd(), option.rootDir) : process.cwd();
+
+  const dotenvFile = join(option.rootDir, option.dotenvFile || ".restclients.env");
+  if (existsSync(dotenvFile)) {
+    option.dotenvFile = dotenvFile;
+    logging.debug("dotenv file found, %s", option.dotenvFile);
+  } else {
+    option.dotenvFile = null;
+    logging.warn("dotenv file not found, %s or %s", option.dotenvFile, ".restclients.env");
+  }
+
+  const settingFile = join(option.rootDir, option.settingFile || "restclients.config.js");
+  if (existsSync(settingFile)) {
+    option.settingFile = settingFile;
+    logging.debug("setting file found, %s", option.settingFile);
+  } else {
+    option.settingFile = null;
+    logging.warn("setting file not found, %s or %s", option.settingFile, "restclients.config.js");
+  }
 
   option.httpClient = option.httpClient || fetch;
 
@@ -107,6 +126,16 @@ const generateWorker = (filename, option) => {
     const vars = variable(exprs);
     if (option.resolvePrompt) {
       vars.resolvePromptVariable = option.resolvePrompt;
+    }
+    if (option.dotenvFile) {
+      vars.setDotenvVariable(readFileSync(option.dotenvFile), "utf-8");
+    }
+    if (option.settingFile) {
+      vars.setSettingVariable(require(option.settingFile) || {});
+      if (option.environment) {
+        logging.info("set setting environment: %s", option.environment);
+        vars.setSettingVariableSelection(option.environment);
+      }
     }
 
     let k = 0;

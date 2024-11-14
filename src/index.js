@@ -16,9 +16,21 @@ const { logging } = require("./util");
       type: "string",
       short: "f",
     },
-    debug: {
+    verbose: {
       type: "boolean",
+      short: "v",
+    },
+    dotenvFile: {
+      type: "string",
       short: "d",
+    },
+    settingFile: {
+      type: "string",
+      short: "s",
+    },
+    environment: {
+      type: "string",
+      short: "e",
     },
   };
   const { values: config } = parseArgs({ args: process.argv.slice(2), options });
@@ -31,5 +43,8 @@ const { logging } = require("./util");
     httpClient: undefined,
     namePattern: config.namePattern,
     filePattern: config.filePattern,
+    dotenvFile: config.dotenvFile,
+    settingFile: config.settingFile,
+    environment: config.environment,
   });
 })();

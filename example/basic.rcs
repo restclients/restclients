@@ -56,3 +56,8 @@ GET https://jsonplaceholder.typicode.com/posts/1
 ### get posts next
 
 GET https://jsonplaceholder.typicode.com/{{postsPath}}/{{postsId}}
+
+### setting and dotenv config
+
+GET https://{{fqdn}}/data
+Authorization: Bearer {{$dotenv %token}}

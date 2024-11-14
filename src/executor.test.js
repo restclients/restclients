@@ -68,7 +68,7 @@ describe("executor", function () {
       httpClient,
       namePattern: "url encode body",
     });
-    const expectBody ="name=foo&password=data+111&option=id%26email";
+    const expectBody = "name=foo&password=data+111&option=id%26email";
     expect(res[0][0].name).toEqual("url encode body");
     expect(res[0][0].range).toEqual([25, 33]);
     expect(res[0][0].url).toEqual("https://test.example.com:8633/users/login");
@@ -94,12 +94,62 @@ describe("executor", function () {
     expect(res[0][0].name).toEqual("multipart form data body");
     expect(res[0][0].range).toEqual([34, 49]);
     expect(res[0][0].url).toEqual("https://test.example.com:8633/users/profile");
-    expect(res[0][0].header).toEqual({ "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A" });
+    expect(res[0][0].header).toEqual({
+      "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A",
+    });
     expect(res[0][0].body).toEqual(expectBody);
     expect(httpClient).toHaveBeenCalledWith("https://test.example.com:8633/users/profile", {
       method: "POST",
       body: expectBody,
       headers: { "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A" },
+    });
+  });
+
+  it("execute example 'int' setting and dotenv config", async function () {
+    const httpClient = jest.fn().mockReturnValue(new Response());
+    const res = await executor({
+      rootDir: "./example",
+      httpClient,
+      namePattern: "setting and dotenv config",
+      settingFile: "./example.config.js",
+      environment: "int",
+      dotenvFile: ".env",
+    });
+
+    expect(res[0][0].name).toEqual("setting and dotenv config");
+    expect(res[0][0].range).toEqual([59, 62]);
+    expect(res[0][0].url).toEqual("https://int.example.com/data");
+    expect(res[0][0].header).toEqual({ Authorization: "Bearer intintint" });
+    expect(res[0][0].body).toEqual(null);
+    expect(httpClient).toHaveBeenCalledWith("https://int.example.com/data", {
+      method: "GET",
+      body: undefined,
+      dispatcher: undefined,
+      headers: { Authorization: "Bearer intintint" },
+    });
+  });
+
+  it("execute example 'stage' setting and dotenv config", async function () {
+    const httpClient = jest.fn().mockReturnValue(new Response());
+    const res = await executor({
+      rootDir: "./example",
+      httpClient,
+      namePattern: "setting and dotenv config",
+      settingFile: "./example.config.js",
+      environment: "stage",
+      dotenvFile: ".env",
+    });
+
+    expect(res[0][0].name).toEqual("setting and dotenv config");
+    expect(res[0][0].range).toEqual([59, 62]);
+    expect(res[0][0].url).toEqual("https://stage.example.com/data");
+    expect(res[0][0].header).toEqual({ Authorization: "Bearer stagestagestage" });
+    expect(res[0][0].body).toEqual(null);
+    expect(httpClient).toHaveBeenCalledWith("https://stage.example.com/data", {
+      method: "GET",
+      body: undefined,
+      dispatcher: undefined,
+      headers: { Authorization: "Bearer stagestagestage" },
     });
   });
 });
