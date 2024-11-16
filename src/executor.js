@@ -60,7 +60,7 @@ const executor = async function (option) {
   }
 
   option.httpClient = option.httpClient || fetch;
-
+  Object.freeze(option);
   logging.info(
     "name pattern: %s, file pattern: %s, root dir: %s, dotenv file: %s, setting file: %s, environment: %s",
     option.namePattern,

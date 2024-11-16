@@ -1,6 +1,6 @@
 {
   "name": "restclients",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "secured and easy to use rest clients",
   "main": "src/index.js",
   "bin": {
