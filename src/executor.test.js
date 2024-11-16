@@ -27,6 +27,7 @@ describe("executor", function () {
       rootDir: "./example",
       httpClient,
       namePattern: "basic",
+      filePattern: ["./basic.rcs"]
     });
     const expectBody = Buffer.from(["{", '    "email": "stdin2",', '    "password": "stdin3"', "}"].join(EOL));
     expect(res[0][0].name).toEqual("basic");

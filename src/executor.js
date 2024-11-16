@@ -30,11 +30,13 @@ const executor = async function (option) {
   }
   if (option.filePattern && isArray(option.filePattern)) {
     try {
-      option.filePattern = new RegExp([...option.filePattern].map(replacePosixSep).join("|"));
+      option.filePattern = new RegExp([...option.filePattern].map(replacePosixSep).join("|"), "i");
     } catch (err) {
       logging.error("Invalid file pattern, %j", err);
       return;
     }
+  } else {
+    option.filePattern = null;
   }
 
   option.rootDir = option.rootDir ? resolve(process.cwd(), option.rootDir) : process.cwd();
@@ -59,6 +61,15 @@ const executor = async function (option) {
 
   option.httpClient = option.httpClient || fetch;
 
+  logging.info(
+    "name pattern: %s, file pattern: %s, root dir: %s, dotenv file: %s, setting file: %s, environment: %s",
+    option.namePattern,
+    option.filePattern,
+    option.rootDir,
+    option.dotenvFile,
+    option.settingFile,
+    option.environment
+  );
   let files = await new Promise((resolve) => {
     find(
       option.roots || [option.rootDir],
@@ -113,6 +124,7 @@ const execute = async (req, exprs, vars, option) => {
         request: req,
         require,
         logging,
+        option,
       })
     );
   }
@@ -133,7 +145,6 @@ const generateWorker = (filename, option) => {
     if (option.settingFile) {
       vars.setSettingVariable(require(option.settingFile) || {});
       if (option.environment) {
-        logging.info("set setting environment: %s", option.environment);
         vars.setSettingVariableSelection(option.environment);
       }
     }

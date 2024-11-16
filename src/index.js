@@ -15,6 +15,7 @@ const { logging } = require("./util");
     filePattern: {
       type: "string",
       short: "f",
+      multiple: true,
     },
     verbose: {
       type: "boolean",
@@ -34,7 +35,7 @@ const { logging } = require("./util");
     },
   };
   const { values: config } = parseArgs({ args: process.argv.slice(2), options });
-  if (config.debug) {
+  if (config.verbose) {
     logging.level("debug");
   }
   logging.debug("argv config: %j", config);
