@@ -73,7 +73,7 @@ const executor = async function (option) {
   let files = await new Promise((resolve) => {
     find(
       option.roots || [option.rootDir],
-      ["rcs", "http"],
+      ["rcs", "http", "rest"],
       () => false,
       false,
       (lists) => {

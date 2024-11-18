@@ -532,6 +532,21 @@ describe("parser url type", function () {
     expect(exprs).toEqual([{ type: "url", value: ["POST", "http://example.com", "HTTP/1.1"] }]);
   });
 
+  it("POST http://{{ hostname }}/{{ $dotenv data }} HTTP/1.1  ", function () {
+    const exprs = parser("POST http://{{ hostname }}/{{ $dotenv data }}  HTTP/1.1  \n", true);
+    expect(exprs).toEqual([
+      {
+        type: "url",
+        value: [
+          "POST",
+          "http://{{ hostname }}/{{ $dotenv data }}",
+          "HTTP/1.1",
+          ["{{ hostname }}", ["hostname"], "{{ $dotenv data }}", ["$dotenv", "data"]],
+        ],
+      },
+    ]);
+  });
+
   it("http://example.com\n?q=a", function () {
     const exprs = parser("http://example.com\n?q=a\n", true);
     expect(exprs).toEqual([

@@ -75,21 +75,13 @@ let create = function (type, value, error = null) {
 
 var tokenizer = function (type, line) {
   let isBlank = (char) => {
-    return (
-      char === " " ||
-      char === "\t" ||
-      char === "\r" ||
-      char === "\n" ||
-      char === "\f" ||
-      char === "\v"
-    );
+    return char === " " || char === "\t" || char === "\r" || char === "\n" || char === "\f" || char === "\v";
   };
 
   let isMetaType = (start, end, metaType) => {
     let len = metaType.length;
     return (
-      ((end - start > len - 1 && isBlank(line.charAt(start + len))) ||
-        end - start === len - 1) &&
+      ((end - start > len - 1 && isBlank(line.charAt(start + len))) || end - start === len - 1) &&
       line.substring(start, start + len).toLowerCase() === metaType
     );
   };
@@ -240,26 +232,16 @@ var tokenizer = function (type, line) {
           return parseBlankLine(type);
         }
 
-        if (
-          line.charAt(start) === "#" &&
-          line.charAt(start + 1) === "#" &&
-          line.charAt(start + 2) === "#"
-        ) {
+        if (line.charAt(start) === "#" && line.charAt(start + 1) === "#" && line.charAt(start + 2) === "#") {
           // start with ###, rest clients seperator
           // new request block
           type = seperatorType;
           start = skipLeftBlank(start + 3, end);
-          return create(
-            type,
-            start >= end + 1 ? [] : [line.substring(start, end + 1)]
-          );
+          return create(type, start >= end + 1 ? [] : [line.substring(start, end + 1)]);
         }
 
         if (type === seperatorType || type === metaType || type === varType) {
-          if (
-            line.charAt(start) === "#" ||
-            (line.charAt(start) === "/" && line.charAt(start + 1) === "/")
-          ) {
+          if (line.charAt(start) === "#" || (line.charAt(start) === "/" && line.charAt(start + 1) === "/")) {
             // meta line
             type = metaType;
 
@@ -382,8 +364,7 @@ var tokenizer = function (type, line) {
                 // curl type
                 type = curlType;
                 start = skipLeftBlank(start, end);
-                let value =
-                  start <= end ? [line.substring(start, end + 1)] : [];
+                let value = start <= end ? [line.substring(start, end + 1)] : [];
                 let vars = extractVar(start, end + 1);
                 if (vars.length > 0) {
                   value.push(vars);
@@ -396,12 +377,23 @@ var tokenizer = function (type, line) {
                   value.push(word);
                   start = skipLeftBlank(start, end);
                   varStart = start;
-                  start = nextBlank(start, end);
+                  let match = new RegExp("\\s*HTTP\\/.*$", "i").exec(line);
+                  if (match) {
+                    start = match.index;
+                  } else {
+                    start = end + 1;
+                  }
                   if (varStart < start) {
                     value.push(line.substring(varStart, start));
                   }
                 } else {
                   value.push("GET");
+                  let match = new RegExp("\\s*HTTP\\/.*$", "i").exec(line);
+                  if (match) {
+                    start = match.index;
+                  } else {
+                    start = end + 1;
+                  }
                   value.push(line.substring(varStart, start));
                 }
 
@@ -442,21 +434,14 @@ var tokenizer = function (type, line) {
         }
       } else {
         // body type
-        if (
-          line.charAt(start) === "#" &&
-          line.charAt(start + 1) === "#" &&
-          line.charAt(start + 2) === "#"
-        ) {
+        if (line.charAt(start) === "#" && line.charAt(start + 1) === "#" && line.charAt(start + 2) === "#") {
           // start with ###, rest clients seperator
           // new request block
           type = seperatorType;
           start = skipLeftBlank(start + 3, end);
-          return create(
-            type,
-            start >= end + 1 ? [] : [line.substring(start, end + 1)]
-          );
+          return create(type, start >= end + 1 ? [] : [line.substring(start, end + 1)]);
         }
-        
+
         let value = [line];
         let vars = extractVar(start, end + 1);
         if (vars.length > 0) {
