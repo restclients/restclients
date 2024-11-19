@@ -1,3 +1,9 @@
+/**
+ * © Copyright restclients. 2024 All Rights Reserved
+ *   Project name: restclients
+ *   This project is licensed under the Apache 2 License, see LICENSE
+ */
+
 const { resolve, join } = require("path");
 const { Script, createContext } = require("vm");
 const {

@@ -4,6 +4,8 @@
  *   This project is licensed under the Apache 2 License, see LICENSE
  */
 
+const { EOL } = require("os");
+
 const methods = [
   "ACL",
   "BIND",
@@ -465,8 +467,9 @@ const parser = () => {
     let position = 0;
     let type = seperatorType;
     let exprs = [];
+    let eolLength = EOL.length;
     while (position < len) {
-      let lineEnd = source.indexOf("\n", position);
+      let lineEnd = source.indexOf(EOL, position);
       if (lineEnd == -1) {
         lineEnd = source.length;
       }
@@ -490,7 +493,7 @@ const parser = () => {
           break;
         }
       }
-      position = lineEnd + 1;
+      position = lineEnd + eolLength;
     }
     return exprs;
   };

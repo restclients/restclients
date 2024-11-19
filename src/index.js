@@ -1,3 +1,9 @@
+/**
+ * © Copyright restclients. 2024 All Rights Reserved
+ *   Project name: restclients
+ *   This project is licensed under the Apache 2 License, see LICENSE
+ */
+
 const { parseArgs } = require("util");
 const { executor } = require("./executor");
 const { logging } = require("./util");
