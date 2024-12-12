@@ -159,6 +159,10 @@ const evaluator = async function (exprs, vars, option) {
     const scheme = port === "443" || port === "8443" ? "https" : "http";
     req.url = `${scheme}://${host}${req.url}`;
   }
+  let userAgent = getHeader(header, "User-Agent");
+  if (userAgent === undefined || userAgent.trim() === "") {
+    req.header["User-Agent"] = (option && option.defaultUserAgent) || "restclients";
+  }
 
   var evaluateBody = (bodies, contentTypeHeader) => {
     const [contentType] = parseContentType(contentTypeHeader) || [ContentType.UnknownType];

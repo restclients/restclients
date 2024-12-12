@@ -69,47 +69,56 @@ const randomInt = (min, max) => {
   }
 };
 
-const settingVariable = (() => {
-  let currentSetting = {};
-  let availableSetting = {};
-  let currentSeletcion = "";
+const environmentVariable = (() => {
+  let currentEnvironmentVariable = {};
+  let availableEnvironmentVariable = {};
+  let currentEnvironment = "";
 
   // new RegExp(`\\{{2}\\$${environment} (.+?)\\}{2}`);
 
   const resolver = (key) => {
-    if (Object.hasOwnProperty.call(availableSetting, key)) {
-      return availableSetting[key].toString();
+    if (Object.hasOwnProperty.call(availableEnvironmentVariable, key)) {
+      return availableEnvironmentVariable[key].toString();
     }
   };
-  const setSetting = (setting) => {
-    currentSetting = setting;
-    const data = Object.assign({}, setting);
+  const setEnvironmentVariable = (environmentVariable) => {
+    currentEnvironmentVariable = environmentVariable;
+    const data = Object.assign({}, environmentVariable);
     populateVariableValue("shared", data["$shared"], data["$shared"]);
-    if (currentSeletcion !== "" && Object.hasOwnProperty.call(currentSetting, currentSeletcion)) {
-      populateVariableValue("shared", data[currentSeletcion], data["$shared"]);
-      populateVariableValue(currentSeletcion, data[currentSeletcion], data[currentSeletcion]);
-      availableSetting = Object.assign({}, data["$shared"], data[currentSeletcion]);
+    if (currentEnvironment !== "" && Object.hasOwnProperty.call(currentEnvironmentVariable, currentEnvironment)) {
+      populateVariableValue("shared", data[currentEnvironment], data["$shared"]);
+      populateVariableValue(currentEnvironment, data[currentEnvironment], data[currentEnvironment]);
+      availableEnvironmentVariable = Object.assign({}, data["$shared"], data[currentEnvironment]);
     } else {
-      availableSetting = Object.assign({}, data["$shared"]);
+      availableEnvironmentVariable = Object.assign({}, data["$shared"]);
     }
   };
-  const setSelection = (selection) => {
-    if (currentSeletcion !== selection && Object.hasOwnProperty.call(currentSetting, selection)) {
-      currentSeletcion = selection;
-      setSetting(currentSetting);
+  const selectEnvironment = (environment) => {
+    if (
+      currentEnvironment !== environment &&
+      Object.hasOwnProperty.call(currentEnvironmentVariable, environment) &&
+      environment[0] !== "$"
+    ) {
+      currentEnvironment = environment;
+      setEnvironmentVariable(currentEnvironmentVariable);
     }
   };
-  const addSettingVariable = (key, value) => {
-    if (Object.hasOwnProperty.call(availableSetting, key)) {
-      logging.warn("overwrite setting variable, key: %s, value: %s, newValue: %s", key, availableSetting[key], value);
+  const addEnvironmentVariable = (key, value) => {
+    if (Object.hasOwnProperty.call(availableEnvironmentVariable, key)) {
+      logging.warn(
+        "overwrite environment variable, key: %s, value: %s, newValue: %s",
+        key,
+        availableEnvironmentVariable[key],
+        value
+      );
     }
-    availableSetting[key] = value;
+    availableEnvironmentVariable[key] = value;
   };
   return {
     resolver,
-    setSetting,
-    setSelection,
-    addSettingVariable,
+    setEnvironmentVariable,
+    selectEnvironment,
+    addEnvironmentVariable,
   };
 })();
 
@@ -208,22 +217,22 @@ const variable = (exprs) => {
     return prompt;
   };
 
-  const resolveSettingVariable = (key) => {
+  const resolveEnvironmentVariable = (key) => {
     // load from setting
-    return { value: settingVariable.resolver(key) };
+    return { value: environmentVariable.resolver(key) };
   };
 
   const resolveDotenvVariable = (key) => {
     // load from .env file
     if (key && key.startsWith("%")) {
-      key = settingVariable.resolver(key.slice(1));
+      key = environmentVariable.resolver(key.slice(1));
     }
     return { value: dotenvVariable.resolver(key) };
   };
 
   const resolveProcessEnvVariable = (key) => {
     if (key && key.startsWith("%")) {
-      key = settingVariable.resolver(key.slice(1));
+      key = environmentVariable.resolver(key.slice(1));
     }
     if (process && process.env) {
       const envValue = process.env[key];
@@ -248,7 +257,6 @@ const variable = (exprs) => {
         // {{$guid}}
         return { value: uuidv4() };
       }
-
       case "$processEnv": {
         // {{$processEnv [%]envVarName}}
         return resolveProcessEnvVariable(args[1]);
@@ -309,7 +317,7 @@ const variable = (exprs) => {
         for (let i = 0; i < args.length - 1; i += 2) {
           if (isArray(args[i + 1]) && args[i + 1].length === 1 && !args[i + 1][0].startsWith("$")) {
             let referenceKey = args[i + 1][0];
-            if (referenceKey.startsWith("%")) {
+            if (referenceKey.startsWith("%") || referenceKey.startsWith("@")) {
               referenceKey = referenceKey.substring(1);
             }
             if (Object.hasOwnProperty.call(fileVariable, referenceKey)) {
@@ -337,12 +345,19 @@ const variable = (exprs) => {
                 if (
                   isArray(args[i + 1]) &&
                   args[i + 1].length === 1 &&
-                  (args[i + 1][0] === resolved || args[i + 1][0] === "%" + resolved)
+                  (args[i + 1][0] === resolved ||
+                    args[i + 1][0] === "%" + resolved ||
+                    args[i + 1][0] === "@" + resolved)
                 ) {
                   if (args[i + 1][0][0] === "%") {
                     fileVariable[target].value = fileVariable[target].value.replace(
                       args[i],
                       encodeURIComponent(resolvedValue)
+                    );
+                  } else if (args[i + 1][0][0] === "@") {
+                    fileVariable[target].value = fileVariable[target].value.replace(
+                      args[i],
+                      Buffer.from(resolvedValue).toString("base64")
                     );
                   } else {
                     fileVariable[target].value = fileVariable[target].value.replace(args[i], resolvedValue);
@@ -383,7 +398,7 @@ const variable = (exprs) => {
               !variable.args[i + 1][0].startsWith("$")
             ) {
               let referenceKey = variable.args[i + 1][0];
-              if (referenceKey.startsWith("%")) {
+              if (referenceKey.startsWith("%") || referenceKey.startsWith("@")) {
                 referenceKey = referenceKey.substring(1);
               }
               if (Object.hasOwnProperty.call(fileVariable, referenceKey)) {
@@ -396,6 +411,11 @@ const variable = (exprs) => {
                     variable.value = variable.value.replace(
                       variable.args[i],
                       encodeURIComponent(fileVariable[referenceKey].value)
+                    );
+                  } else if (variable.args[i + 1][0][0] === "@") {
+                    variable.value = variable.value.replace(
+                      variable.args[i],
+                      Buffer.from(fileVariable[referenceKey].value).toString("base64")
                     );
                   } else {
                     variable.value = variable.value.replace(variable.args[i], fileVariable[referenceKey].value);
@@ -410,10 +430,12 @@ const variable = (exprs) => {
                   }
                 }
               } else {
-                let { value } = resolveSettingVariable(referenceKey);
+                let { value } = resolveEnvironmentVariable(referenceKey);
                 if (value !== undefined) {
                   if (variable.args[i + 1][0][0] === "%") {
                     variable.value = variable.value.replace(variable.args[i], encodeURIComponent(value));
+                  } else if (variable.args[i + 1][0][0] === "@") {
+                    variable.value = variable.value.replace(variable.args[i], Buffer.from(value).toString("base64"));
                   } else {
                     variable.value = variable.value.replace(variable.args[i], value);
                   }
@@ -476,16 +498,21 @@ const variable = (exprs) => {
           for (let i = 0; i < args.length - 1; i += 2) {
             if (isArray(args[i + 1]) && args[i + 1].length === 1 && !args[i + 1][0].startsWith("$")) {
               let referenceKey = args[i + 1][0];
-              if (referenceKey.startsWith("%")) {
+              if (referenceKey.startsWith("%") || referenceKey.startsWith("@")) {
                 referenceKey = referenceKey.substring(1);
               }
               if (!Object.hasOwnProperty.call(fileVariable, referenceKey)) {
-                let { value } = resolveSettingVariable(referenceKey);
+                let { value } = resolveEnvironmentVariable(referenceKey);
                 if (value !== undefined) {
                   if (args[i + 1][0][0] === "%") {
                     resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(
                       args[i],
                       encodeURIComponent(value)
+                    );
+                  } else if (args[i + 1][0][0] === "@") {
+                    resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(
+                      args[i],
+                      Buffer.from(value).toString("base64")
                     );
                   } else {
                     resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(args[i], value);
@@ -532,12 +559,19 @@ const variable = (exprs) => {
                   if (
                     isArray(args[i + 1]) &&
                     args[i + 1].length === 1 &&
-                    (args[i + 1][0] === resolvedKey || args[i + 1][0] === "%" + resolvedKey)
+                    (args[i + 1][0] === resolvedKey ||
+                      args[i + 1][0] === "%" + resolvedKey ||
+                      args[i + 1][0] === "@" + resolvedKey)
                   ) {
                     if (args[i + 1][0][0] === "%") {
                       resolvedFileVariable[target].value = resolvedFileVariable[target].value.replace(
                         args[i],
                         encodeURIComponent(resolvedValue)
+                      );
+                    } else if (args[i + 1][0][0] === "@") {
+                      resolvedFileVariable[target].value = resolvedFileVariable[target].value.replace(
+                        args[i],
+                        Buffer.from(resolvedValue).toString("base64")
                       );
                     } else {
                       resolvedFileVariable[target].value = resolvedFileVariable[target].value.replace(
@@ -575,7 +609,7 @@ const variable = (exprs) => {
               !variable.args[i + 1][0].startsWith("$")
             ) {
               let referenceKey = variable.args[i + 1][0];
-              if (referenceKey.startsWith("%")) {
+              if (referenceKey.startsWith("%") || referenceKey.startsWith("@")) {
                 referenceKey = referenceKey.substring(1);
               }
               if (Object.hasOwnProperty.call(resolvedFileVariable, referenceKey)) {
@@ -583,6 +617,11 @@ const variable = (exprs) => {
                   variable.value = variable.value.replace(
                     variable.args[i],
                     encodeURIComponent(resolvedFileVariable[referenceKey].value)
+                  );
+                } else if (variable.args[i + 1][0][0] === "@") {
+                  variable.value = variable.value.replace(
+                    variable.args[i],
+                    Buffer.from(resolvedFileVariable[referenceKey].value).toString("base64")
                   );
                 } else {
                   variable.value = variable.value.replace(variable.args[i], resolvedFileVariable[referenceKey].value);
@@ -621,14 +660,14 @@ const variable = (exprs) => {
   })(exprs);
 
   return {
-    setSettingVariableSelection: settingVariable.setSelection,
-    setSettingVariable: settingVariable.setSetting,
-    addSettingVariable: settingVariable.addSettingVariable,
+    selectEnvironment: environmentVariable.selectEnvironment,
+    setEnvironmentVariable: environmentVariable.setEnvironmentVariable,
+    addEnvironmentVariable: environmentVariable.addEnvironmentVariable,
     resetDotenvVariable: dotenvVariable.resetDotenv,
     setDotenvVariable: dotenvVariable.setDotenv,
     resolvePromptVariable,
     resolveDynamicVariable,
-    resolveSettingVariable,
+    resolveEnvironmentVariable,
     resolveFileVariable: documentVariable.resolveFileVariable,
     setRequestVariable: documentVariable.setRequestVariable,
     addFileVariable: documentVariable.addFileVariable,
@@ -637,9 +676,9 @@ const variable = (exprs) => {
 
 const variableToContext = (vars, resolvedVariables) => {
   return {
-    addSettingVariable: vars.addSettingVariable,
+    addEnvironmentVariable: vars.addEnvironmentVariable,
     addFileVariable: vars.addFileVariable,
-    resolveFileVariables: (args) => {
+    resolveVariables: (...args) => {
       const variables = (isArray(args[0]) ? args[0] : args).map((arg) => {
         return {
           value: `{{${arg}}}`,

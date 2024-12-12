@@ -1,13 +1,16 @@
 module.exports = {
+  $restclients: {
+    userAgent: "myRestclients",
+  },
   $shared: {
     key1: "KEYYYY",
   },
   int: {
     fqdn: "int.example.com",
-    token: "INT_TOKEN"
+    token: "INT_TOKEN",
   },
   stage: {
     fqdn: "stage.example.com",
-    token: "STAGE_TOKEN"
+    token: "STAGE_TOKEN",
   },
 };

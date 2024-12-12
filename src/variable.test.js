@@ -3,10 +3,10 @@ const path = require("path");
 const { describe, expect, it, beforeEach, afterEach, beforeAll, afterAll } = require("@jest/globals");
 const { variable } = require("./variable");
 const {
-  resolveSettingVariable,
+  resolveEnvironmentVariable,
   resolveDynamicVariable,
-  setSettingVariable,
-  setSettingVariableSelection,
+  setEnvironmentVariable,
+  selectEnvironment,
   resetDotenvVariable,
   setDotenvVariable,
 } = variable([]);
@@ -139,7 +139,7 @@ describe("resolver.resolveDynamicVariable", function () {
 
     describe("reference", function () {
       beforeAll(() => {
-        setSettingVariable({
+        setEnvironmentVariable({
           $shared: {
             key1: "KEYYYY",
           },
@@ -147,7 +147,7 @@ describe("resolver.resolveDynamicVariable", function () {
             intKey1: "INTKEY",
           },
         });
-        setSettingVariableSelection("int");
+        selectEnvironment("int");
       });
       it("$processEnv %key1", function () {
         const res = resolveDynamicVariable(["$processEnv", "%key1"]);
@@ -204,7 +204,7 @@ describe("resolver.resolveDynamicVariable", function () {
 
     describe("reference", function () {
       beforeAll(() => {
-        setSettingVariable({
+        setEnvironmentVariable({
           $shared: {
             key1: "KEYYYY",
           },
@@ -212,7 +212,7 @@ describe("resolver.resolveDynamicVariable", function () {
             intKey1: "INTKEY",
           },
         });
-        setSettingVariableSelection("int");
+        selectEnvironment("int");
       });
       it("$dotenv %key1", function () {
         const res = resolveDynamicVariable(["$dotenv", "%key1"]);
@@ -240,10 +240,10 @@ describe("resolver.resolveDynamicVariable", function () {
   });
 });
 
-describe("resolver.resolveSettingVariable", function () {
+describe("resolver.resolveEnvironmentVariable", function () {
   describe("shared", function () {
     beforeAll(() => {
-      setSettingVariable({
+      setEnvironmentVariable({
         $shared: {
           key1: "KEYYYY",
           key2: "sfasfd",
@@ -256,44 +256,44 @@ describe("resolver.resolveSettingVariable", function () {
       });
     });
     it("key1", function () {
-      const res = resolveSettingVariable("key1");
+      const res = resolveEnvironmentVariable("key1");
       expect(res.value).toEqual("KEYYYY");
     });
 
     it("key2", function () {
-      const res = resolveSettingVariable("key2");
+      const res = resolveEnvironmentVariable("key2");
       expect(res.value).toEqual("sfasfd");
     });
 
     it("key3", function () {
-      const res = resolveSettingVariable("key3");
+      const res = resolveEnvironmentVariable("key3");
       expect(res.value).toEqual("12");
     });
 
     it("key4", function () {
-      const res = resolveSettingVariable("key4");
+      const res = resolveEnvironmentVariable("key4");
       expect(res.value).toEqual("ddff 12");
     });
 
     it("key5", function () {
-      const res = resolveSettingVariable("key5");
+      const res = resolveEnvironmentVariable("key5");
       expect(res.value).toEqual("ddff 12");
     });
 
     it("key6", function () {
-      const res = resolveSettingVariable("key6");
+      const res = resolveEnvironmentVariable("key6");
       expect(res.value).toEqual("ddff sfasfd ss 12");
     });
 
     it("key7", function () {
-      const res = resolveSettingVariable("key7");
+      const res = resolveEnvironmentVariable("key7");
       expect(res.value).toEqual("ddff undefined");
     });
   });
 
   describe("int", function () {
     beforeAll(() => {
-      setSettingVariable({
+      setEnvironmentVariable({
         $shared: {
           key1: "KEYYYY",
           key2: "sfasfd",
@@ -311,62 +311,57 @@ describe("resolver.resolveSettingVariable", function () {
           intKey6: "INT REFER SHARED {{ $shared key4}} INT REFER INT {{ $int intKey2 }}",
         },
       });
-      setSettingVariableSelection("int");
+      selectEnvironment("int");
     });
     it("intKey1", function () {
-      const res = resolveSettingVariable("intKey1");
+      const res = resolveEnvironmentVariable("intKey1");
       expect(res.value).toEqual("INT KEY 1");
     });
 
     it("intKey2", function () {
-      const res = resolveSettingVariable("intKey2");
+      const res = resolveEnvironmentVariable("intKey2");
       expect(res.value).toEqual("3");
     });
 
     it("intKey3", function () {
-      const res = resolveSettingVariable("intKey3");
+      const res = resolveEnvironmentVariable("intKey3");
       expect(res.value).toEqual("INT REFER SHARED ddff 12");
     });
 
     it("intKey4", function () {
-      const res = resolveSettingVariable("intKey4");
+      const res = resolveEnvironmentVariable("intKey4");
       expect(res.value).toEqual("INT REFER INT 3");
     });
 
     it("intKey5", function () {
-      const res = resolveSettingVariable("intKey5");
+      const res = resolveEnvironmentVariable("intKey5");
       expect(res.value).toEqual("INT REFER INT 3 INT KEY 1");
     });
 
     it("intKey6", function () {
-      const res = resolveSettingVariable("intKey6");
+      const res = resolveEnvironmentVariable("intKey6");
       expect(res.value).toEqual("INT REFER SHARED ddff 12 INT REFER INT 3");
     });
   });
 });
 
 describe("resolver.resolveFileVariable", function () {
-  const {
-    resolveFileVariable,
-    setSettingVariable,
-    setSettingVariableSelection,
-    resetDotenvVariable,
-    setDotenvVariable,
-  } = variable([
-    { type: "var", value: ["b", "cccc", []] },
-    { type: "var", value: ["a", " {{b}} ", ["{{b}}", ["b"]]] },
-    { type: "var", value: ["c", "{{a}}  ccdd {{b}}", ["{{a}}", ["a"], "{{b}}", ["b"]]] },
-    { type: "var", value: ["d", "{{b}}  {{ intKey1 }}", ["{{b}}", ["b"], "{{ intKey1 }}", ["intKey1"]]] },
-    { type: "var", value: ["e", "{{d}}  {{ $timestamp }}", ["{{d}}", ["d"], "{{ $timestamp }}", ["$timestamp"]]] },
-    {
-      type: "var",
-      value: [
-        "f",
-        "{{e}}  {{ $randomInt 10 10 }}",
-        ["{{e}}", ["e"], "{{ $randomInt 10 10 }}", ["$randomInt", "10", "10"]],
-      ],
-    },
-  ]);
+  const { resolveFileVariable, setEnvironmentVariable, selectEnvironment, resetDotenvVariable, setDotenvVariable } =
+    variable([
+      { type: "var", value: ["b", "cccc", []] },
+      { type: "var", value: ["a", " {{b}} ", ["{{b}}", ["b"]]] },
+      { type: "var", value: ["c", "{{a}}  ccdd {{b}}", ["{{a}}", ["a"], "{{b}}", ["b"]]] },
+      { type: "var", value: ["d", "{{b}}  {{ intKey1 }}", ["{{b}}", ["b"], "{{ intKey1 }}", ["intKey1"]]] },
+      { type: "var", value: ["e", "{{d}}  {{ $timestamp }}", ["{{d}}", ["d"], "{{ $timestamp }}", ["$timestamp"]]] },
+      {
+        type: "var",
+        value: [
+          "f",
+          "{{e}}  {{ $randomInt 10 10 }}",
+          ["{{e}}", ["e"], "{{ $randomInt 10 10 }}", ["$randomInt", "10", "10"]],
+        ],
+      },
+    ]);
   let spy;
   beforeAll(() => {
     const dotenvFile = path.join(__dirname, "..", ".test.env");
@@ -376,7 +371,7 @@ describe("resolver.resolveFileVariable", function () {
       setDotenvVariable(src);
     }
 
-    setSettingVariable({
+    setEnvironmentVariable({
       $shared: {
         key1: "KEYYYY",
         key2: "sfasfd",
@@ -394,7 +389,7 @@ describe("resolver.resolveFileVariable", function () {
         intKey6: "INT REFER SHARED {{ $shared key4}} INT REFER INT {{ $int intKey2 }}",
       },
     });
-    setSettingVariableSelection("int");
+    selectEnvironment("int");
 
     process.env = {};
     process.env["PEDATA"] = "process env data";
@@ -416,9 +411,29 @@ describe("resolver.resolveFileVariable", function () {
           value: "http://{{a}}.{{ b}}.{{ c }} {{intKey3}}",
           args: ["{{a}}", ["a"], "{{ b}}", ["b"], "{{ c }}", ["c"], "{{intKey3}}", ["intKey3"]],
         },
+        {
+          value: "{{%a}} {{@a}}",
+          args: ["{{%a}}", ["%a"], "{{@a}}", ["@a"]],
+        },
+        {
+          value: "{{%key4}} {{@key4}}",
+          args: ["{{%key4}}", ["%key4"], "{{@key4}}", ["@key4"]],
+        },
+        {
+          value: "{{%key3}} {{@key3}}",
+          args: ["{{%key3}}", ["%key3"], "{{@key3}}", ["@key3"]],
+        },
+        {
+          value: "{{%intKey4}} {{@intKey4}}",
+          args: ["{{%intKey4}}", ["%intKey4"], "{{@intKey4}}", ["@intKey4"]],
+        },
       ];
       resolveFileVariable(variables);
       expect(variables[0].value).toEqual("http:// cccc .cccc. cccc   ccdd cccc INT REFER SHARED ddff 12");
+      expect(variables[1].value).toEqual("%20cccc%20 IGNjY2Mg");
+      expect(variables[2].value).toEqual("ddff%2012 ZGRmZiAxMg==");
+      expect(variables[3].value).toEqual("12 MTI=");
+      expect(variables[4].value).toEqual("INT%20REFER%20INT%203 SU5UIFJFRkVSIElOVCAz");
     });
 
     it("with setting variable 2", function () {

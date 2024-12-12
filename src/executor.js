@@ -60,6 +60,7 @@ const executor = async function (option) {
   if (existsSync(settingFile)) {
     option.settingFile = settingFile;
     logging.debug("setting file found, %s", option.settingFile);
+    option.defaultUserAgent = require(settingFile)?.["$restclients"]?.["userAgent"];
   } else {
     option.settingFile = null;
     logging.warn("setting file not found, %s or %s", option.settingFile, "restclients.config.js");
@@ -118,6 +119,7 @@ const execute = async (req, exprs, vars, option) => {
     await evaluator(exprs, vars, {
       rootDir: option.rootDir,
       currentFilePath: req.filename,
+      defaultUserAgent: option.defaultUserAgent,
     })
   );
 
@@ -149,9 +151,9 @@ const generateWorker = (filename, option) => {
       vars.setDotenvVariable(readFileSync(option.dotenvFile), "utf-8");
     }
     if (option.settingFile) {
-      vars.setSettingVariable(require(option.settingFile) || {});
+      vars.setEnvironmentVariable(require(option.settingFile) || {});
       if (option.environment) {
-        vars.setSettingVariableSelection(option.environment);
+        vars.selectEnvironment(option.environment);
       }
     }
 
@@ -325,9 +327,10 @@ const sendRequest = async (req, option) => {
       rows.push(`${padding("Request URL:", " ", keyWidth)}${request.origin}${request.path}`);
       rows.push(`${padding("Request Method:", " ", keyWidth)}${request.method}`);
       rows.push(colorize.cyan(padding("-----Request Headers-----", "-", width)));
-      request.headers.forEach((value, name) => {
-        rows.push(`${padding(name + ": ", " ", keyWidth)}${value}`);
-      });
+      request.headers &&
+        request.headers.forEach((value, name) => {
+          rows.push(`${padding(name + ": ", " ", keyWidth)}${value}`);
+        });
     }
     return {
       error: err,

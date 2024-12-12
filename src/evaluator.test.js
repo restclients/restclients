@@ -59,7 +59,7 @@ describe("evaluator", function () {
       { type: "body", value: ["HELLO WORLD {{f}}", ["{{f}}", ["f"]]] },
     ];
     const vars = variable(exprs);
-    vars.setSettingVariable({
+    vars.setEnvironmentVariable({
       $shared: {
         key1: "KEYYYY",
         key2: "sfasfd",
@@ -77,7 +77,7 @@ describe("evaluator", function () {
         intKey6: "INT REFER SHARED {{ $shared key4}} INT REFER INT {{ $int intKey2 }}",
       },
     });
-    vars.setSettingVariableSelection("int");
+    vars.selectEnvironment("int");
     const req = await evaluator(exprs, vars);
     expect(req.method).toEqual("POST");
     expect(req.url).toEqual("http:// cccc example.comstdin?q=cccc&p= cccc   ccdd cccc");
@@ -128,7 +128,7 @@ describe("evaluator", function () {
       { type: "body", value: ["HELLO WORLD {{f}}", ["{{f}}", ["f"]]] },
     ];
     const vars = variable(exprs);
-    vars.setSettingVariable({
+    vars.setEnvironmentVariable({
       $shared: {
         key1: "KEYYYY",
         key2: "sfasfd",
@@ -146,7 +146,7 @@ describe("evaluator", function () {
         intKey6: "INT REFER SHARED {{ $shared key4}} INT REFER INT {{ $int intKey2 }}",
       },
     });
-    vars.setSettingVariableSelection("int");
+    vars.selectEnvironment("int");
     const req = await evaluator(exprs, vars);
     expect(req.method).toEqual("POST");
     expect(req.url).toEqual("http://example.com/test/ cccc /stdin?q=cccc&p= cccc   ccdd cccc");

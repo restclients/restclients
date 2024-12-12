@@ -27,18 +27,19 @@ describe("executor", function () {
       rootDir: "./example",
       httpClient,
       namePattern: "basic",
-      filePattern: ["./basic.rcs"]
+      filePattern: ["./basic.rcs"],
     });
     const expectBody = Buffer.from(["{", '    "email": "stdin2",', '    "password": "stdin3"', "}"].join(EOL));
     expect(res[0][0].name).toEqual("basic");
     expect(res[0][0].range).toEqual([7, 18]);
     expect(res[0][0].url).toEqual("https://test.example.com:8633/users/stdin1");
-    expect(res[0][0].header).toEqual({ "Content-Type": "application/json" });
+    expect(res[0][0].header).toEqual({ "Content-Type": "application/json", "User-Agent": "restclients" });
     expect(res[0][0].body).toEqual(expectBody);
     expect(httpClient).toHaveBeenCalledWith("https://test.example.com:8633/users/stdin1", {
       method: "POST",
       body: expectBody,
-      headers: { "Content-Type": "application/json" },
+      dispatcher: undefined,
+      headers: { "Content-Type": "application/json", "User-Agent": "restclients" },
     });
   });
 
@@ -53,12 +54,13 @@ describe("executor", function () {
     expect(res[0][0].name).toEqual("file body");
     expect(res[0][0].range).toEqual([19, 24]);
     expect(res[0][0].url).toEqual("https://test.example.com:8633/users/file");
-    expect(res[0][0].header).toEqual({ "Content-Type": "application/octet-stream" });
+    expect(res[0][0].header).toEqual({ "Content-Type": "application/octet-stream", "User-Agent": "restclients" });
     expect(res[0][0].body).toEqual(expectBody);
     expect(httpClient).toHaveBeenCalledWith("https://test.example.com:8633/users/file", {
       method: "POST",
       body: expectBody,
-      headers: { "Content-Type": "application/octet-stream" },
+      dispatcher: undefined,
+      headers: { "Content-Type": "application/octet-stream", "User-Agent": "restclients" },
     });
   });
 
@@ -73,12 +75,16 @@ describe("executor", function () {
     expect(res[0][0].name).toEqual("url encode body");
     expect(res[0][0].range).toEqual([25, 33]);
     expect(res[0][0].url).toEqual("https://test.example.com:8633/users/login");
-    expect(res[0][0].header).toEqual({ "Content-Type": "application/x-www-form-urlencoded" });
+    expect(res[0][0].header).toEqual({
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "restclients",
+    });
     expect(res[0][0].body).toEqual(expectBody);
     expect(httpClient).toHaveBeenCalledWith("https://test.example.com:8633/users/login", {
       method: "POST",
       body: expectBody,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      dispatcher: undefined,
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "restclients" },
     });
   });
 
@@ -97,12 +103,17 @@ describe("executor", function () {
     expect(res[0][0].url).toEqual("https://test.example.com:8633/users/profile");
     expect(res[0][0].header).toEqual({
       "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A",
+      "User-Agent": "restclients",
     });
     expect(res[0][0].body).toEqual(expectBody);
     expect(httpClient).toHaveBeenCalledWith("https://test.example.com:8633/users/profile", {
       method: "POST",
       body: expectBody,
-      headers: { "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A" },
+      dispatcher: undefined,
+      headers: {
+        "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryM6cFocZWsx5Brf1A",
+        "User-Agent": "restclients",
+      },
     });
   });
 
@@ -120,13 +131,13 @@ describe("executor", function () {
     expect(res[0][0].name).toEqual("setting and dotenv config");
     expect(res[0][0].range).toEqual([59, 62]);
     expect(res[0][0].url).toEqual("https://int.example.com/data");
-    expect(res[0][0].header).toEqual({ Authorization: "Bearer intintint" });
+    expect(res[0][0].header).toEqual({ Authorization: "Bearer intintint", "User-Agent": "myRestclients" });
     expect(res[0][0].body).toEqual(null);
     expect(httpClient).toHaveBeenCalledWith("https://int.example.com/data", {
       method: "GET",
       body: undefined,
       dispatcher: undefined,
-      headers: { Authorization: "Bearer intintint" },
+      headers: { Authorization: "Bearer intintint", "User-Agent": "myRestclients" },
     });
   });
 
@@ -144,13 +155,13 @@ describe("executor", function () {
     expect(res[0][0].name).toEqual("setting and dotenv config");
     expect(res[0][0].range).toEqual([59, 62]);
     expect(res[0][0].url).toEqual("https://stage.example.com/data");
-    expect(res[0][0].header).toEqual({ Authorization: "Bearer stagestagestage" });
+    expect(res[0][0].header).toEqual({ Authorization: "Bearer stagestagestage", "User-Agent": "myRestclients" });
     expect(res[0][0].body).toEqual(null);
     expect(httpClient).toHaveBeenCalledWith("https://stage.example.com/data", {
       method: "GET",
       body: undefined,
       dispatcher: undefined,
-      headers: { Authorization: "Bearer stagestagestage" },
+      headers: { Authorization: "Bearer stagestagestage", "User-Agent": "myRestclients" },
     });
   });
 });
