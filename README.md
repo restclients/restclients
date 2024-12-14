@@ -56,7 +56,7 @@ cd ./example
 npx restclients -r ./example -n "posts" -s "example.config.js" -d ".env" -e "int" -f example
 ```
 
-### Install & Usage
+### Installation & Usage
 
 ```bash
 npm install restclients
