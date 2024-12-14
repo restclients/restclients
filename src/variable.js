@@ -75,6 +75,24 @@ const environmentVariable = (() => {
   let currentEnvironment = "";
 
   // new RegExp(`\\{{2}\\$${environment} (.+?)\\}{2}`);
+  const populateVariableValue = (environment, des, src) => {
+    const variableRegex = new RegExp(`\\{{2}\\s*\\$${environment} (.+?)\\}{2}`, "gm");
+    for (const [key, value] of Object.entries(des)) {
+      if (typeof value === "string") {
+        let match;
+        let populated = false;
+        let populatedValue = value;
+        while ((match = variableRegex.exec(value)) !== null) {
+          const referenceKey = match[1].trim();
+          populatedValue = populatedValue.replace(match[0], src[referenceKey]);
+          populated = true;
+        }
+        if (populated) {
+          des[key] = populatedValue;
+        }
+      }
+    }
+  };
 
   const resolver = (key) => {
     if (Object.hasOwnProperty.call(availableEnvironmentVariable, key)) {
@@ -141,25 +159,6 @@ const expandVariableValue = (value) => {
     value = value.trim();
   }
   return value;
-};
-
-const populateVariableValue = (environment, des, src) => {
-  const variableRegex = new RegExp(`\\{{2}\\s*\\$${environment} (.+?)\\}{2}`, "gm");
-  for (const [key, value] of Object.entries(des)) {
-    if (typeof value === "string") {
-      let match;
-      let populated = false;
-      let populatedValue = value;
-      while ((match = variableRegex.exec(value)) !== null) {
-        const referenceKey = match[1].trim();
-        populatedValue = populatedValue.replace(match[0], src[referenceKey]);
-        populated = true;
-      }
-      if (populated) {
-        des[key] = populatedValue;
-      }
-    }
-  }
 };
 
 const dotenvVariable = (() => {
@@ -284,6 +283,24 @@ const variable = (exprs) => {
     }
   };
 
+  const getReferenceKey = (key) => {
+    if (typeof key === "string" && (key.startsWith("%") || key.startsWith("@"))) {
+      return key.substring(1);
+    }
+    return key;
+  };
+
+  const populateVariableValue = (variable, target, key, replacementKey, resolvedValue) => {
+    let item = target ? variable[target] : variable;
+    if (key[0] === "%") {
+      item.value = item.value.replace(replacementKey, encodeURIComponent(resolvedValue));
+    } else if (key[0] === "@") {
+      item.value = item.value.replace(replacementKey, Buffer.from(resolvedValue).toString("base64"));
+    } else {
+      item.value = item.value.replace(replacementKey, resolvedValue);
+    }
+  };
+
   const documentVariable = ((exprs) => {
     let fileVariable = {};
     let requestVariable = {};
@@ -316,10 +333,7 @@ const variable = (exprs) => {
       if (isArray(args) && args.length >= 2) {
         for (let i = 0; i < args.length - 1; i += 2) {
           if (isArray(args[i + 1]) && args[i + 1].length === 1 && !args[i + 1][0].startsWith("$")) {
-            let referenceKey = args[i + 1][0];
-            if (referenceKey.startsWith("%") || referenceKey.startsWith("@")) {
-              referenceKey = referenceKey.substring(1);
-            }
+            let referenceKey = getReferenceKey(args[i + 1][0]);
             if (Object.hasOwnProperty.call(fileVariable, referenceKey)) {
               if (reference[referenceKey]) {
                 reference[referenceKey].push(key);
@@ -342,26 +356,8 @@ const variable = (exprs) => {
             let resolvedIndex = [];
             if (isArray(args) && args.length >= 2) {
               for (let i = 0; i < args.length - 1; i += 2) {
-                if (
-                  isArray(args[i + 1]) &&
-                  args[i + 1].length === 1 &&
-                  (args[i + 1][0] === resolved ||
-                    args[i + 1][0] === "%" + resolved ||
-                    args[i + 1][0] === "@" + resolved)
-                ) {
-                  if (args[i + 1][0][0] === "%") {
-                    fileVariable[target].value = fileVariable[target].value.replace(
-                      args[i],
-                      encodeURIComponent(resolvedValue)
-                    );
-                  } else if (args[i + 1][0][0] === "@") {
-                    fileVariable[target].value = fileVariable[target].value.replace(
-                      args[i],
-                      Buffer.from(resolvedValue).toString("base64")
-                    );
-                  } else {
-                    fileVariable[target].value = fileVariable[target].value.replace(args[i], resolvedValue);
-                  }
+                if (isArray(args[i + 1]) && args[i + 1].length === 1 && getReferenceKey(args[i + 1][0]) === resolved) {
+                  populateVariableValue(fileVariable, target, args[i + 1][0], args[i], resolvedValue);
                   resolvedIndex.push(i);
                 }
               }
@@ -397,29 +393,20 @@ const variable = (exprs) => {
               variable.args[i + 1].length === 1 &&
               !variable.args[i + 1][0].startsWith("$")
             ) {
-              let referenceKey = variable.args[i + 1][0];
-              if (referenceKey.startsWith("%") || referenceKey.startsWith("@")) {
-                referenceKey = referenceKey.substring(1);
-              }
+              let referenceKey = getReferenceKey(variable.args[i + 1][0]);
               if (Object.hasOwnProperty.call(fileVariable, referenceKey)) {
                 if (
                   fileVariable[referenceKey].args === null ||
                   (isArray(fileVariable[referenceKey].args) && fileVariable[referenceKey].args.length < 2)
                 ) {
                   // no dependency variable
-                  if (variable.args[i + 1][0][0] === "%") {
-                    variable.value = variable.value.replace(
-                      variable.args[i],
-                      encodeURIComponent(fileVariable[referenceKey].value)
-                    );
-                  } else if (variable.args[i + 1][0][0] === "@") {
-                    variable.value = variable.value.replace(
-                      variable.args[i],
-                      Buffer.from(fileVariable[referenceKey].value).toString("base64")
-                    );
-                  } else {
-                    variable.value = variable.value.replace(variable.args[i], fileVariable[referenceKey].value);
-                  }
+                  populateVariableValue(
+                    variable,
+                    undefined,
+                    variable.args[i + 1][0],
+                    variable.args[i],
+                    fileVariable[referenceKey].value
+                  );
                   resolvedIndex.push(i);
                 } else {
                   if (
@@ -432,20 +419,14 @@ const variable = (exprs) => {
               } else {
                 let { value } = resolveEnvironmentVariable(referenceKey);
                 if (value !== undefined) {
-                  if (variable.args[i + 1][0][0] === "%") {
-                    variable.value = variable.value.replace(variable.args[i], encodeURIComponent(value));
-                  } else if (variable.args[i + 1][0][0] === "@") {
-                    variable.value = variable.value.replace(variable.args[i], Buffer.from(value).toString("base64"));
-                  } else {
-                    variable.value = variable.value.replace(variable.args[i], value);
-                  }
+                  populateVariableValue(variable, undefined, variable.args[i + 1][0], variable.args[i], value);
                   resolvedIndex.push(i);
                 }
               }
             } else {
               let { value } = resolveDynamicVariable(variable.args[i + 1]);
               if (value !== undefined) {
-                variable.value = variable.value.replace(variable.args[i], value);
+                populateVariableValue(variable, undefined, variable.args[i + 1][0], variable.args[i], value);
                 resolvedIndex.push(i);
               }
             }
@@ -497,33 +478,18 @@ const variable = (exprs) => {
         if (isArray(args) && args.length >= 2) {
           for (let i = 0; i < args.length - 1; i += 2) {
             if (isArray(args[i + 1]) && args[i + 1].length === 1 && !args[i + 1][0].startsWith("$")) {
-              let referenceKey = args[i + 1][0];
-              if (referenceKey.startsWith("%") || referenceKey.startsWith("@")) {
-                referenceKey = referenceKey.substring(1);
-              }
+              let referenceKey = getReferenceKey(args[i + 1][0]);
               if (!Object.hasOwnProperty.call(fileVariable, referenceKey)) {
                 let { value } = resolveEnvironmentVariable(referenceKey);
                 if (value !== undefined) {
-                  if (args[i + 1][0][0] === "%") {
-                    resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(
-                      args[i],
-                      encodeURIComponent(value)
-                    );
-                  } else if (args[i + 1][0][0] === "@") {
-                    resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(
-                      args[i],
-                      Buffer.from(value).toString("base64")
-                    );
-                  } else {
-                    resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(args[i], value);
-                  }
+                  populateVariableValue(resolvedFileVariable, key, args[i + 1][0], args[i], value);
                   resolvedIndex.push(i);
                 }
               }
             } else {
               let { value } = resolveDynamicVariable(args[i + 1]);
               if (value !== undefined) {
-                resolvedFileVariable[key].value = resolvedFileVariable[key].value.replace(args[i], value);
+                populateVariableValue(resolvedFileVariable, key, args[i + 1][0], args[i], value);
                 resolvedIndex.push(i);
               }
             }
@@ -556,29 +522,8 @@ const variable = (exprs) => {
               let resolvedIndex = [];
               if (isArray(args) && args.length >= 2) {
                 for (let i = 0; i < args.length - 1; i += 2) {
-                  if (
-                    isArray(args[i + 1]) &&
-                    args[i + 1].length === 1 &&
-                    (args[i + 1][0] === resolvedKey ||
-                      args[i + 1][0] === "%" + resolvedKey ||
-                      args[i + 1][0] === "@" + resolvedKey)
-                  ) {
-                    if (args[i + 1][0][0] === "%") {
-                      resolvedFileVariable[target].value = resolvedFileVariable[target].value.replace(
-                        args[i],
-                        encodeURIComponent(resolvedValue)
-                      );
-                    } else if (args[i + 1][0][0] === "@") {
-                      resolvedFileVariable[target].value = resolvedFileVariable[target].value.replace(
-                        args[i],
-                        Buffer.from(resolvedValue).toString("base64")
-                      );
-                    } else {
-                      resolvedFileVariable[target].value = resolvedFileVariable[target].value.replace(
-                        args[i],
-                        resolvedValue
-                      );
-                    }
+                  if (isArray(args[i + 1]) && args[i + 1].length === 1 && getReferenceKey(args[i + 1][0])) {
+                    populateVariableValue(resolvedFileVariable, target, args[i + 1][0], args[i], resolvedValue);
                     resolvedIndex.push(i);
                   }
                 }
@@ -608,24 +553,15 @@ const variable = (exprs) => {
               variable.args[i + 1].length === 1 &&
               !variable.args[i + 1][0].startsWith("$")
             ) {
-              let referenceKey = variable.args[i + 1][0];
-              if (referenceKey.startsWith("%") || referenceKey.startsWith("@")) {
-                referenceKey = referenceKey.substring(1);
-              }
+              let referenceKey = getReferenceKey(variable.args[i + 1][0]);
               if (Object.hasOwnProperty.call(resolvedFileVariable, referenceKey)) {
-                if (variable.args[i + 1][0][0] === "%") {
-                  variable.value = variable.value.replace(
-                    variable.args[i],
-                    encodeURIComponent(resolvedFileVariable[referenceKey].value)
-                  );
-                } else if (variable.args[i + 1][0][0] === "@") {
-                  variable.value = variable.value.replace(
-                    variable.args[i],
-                    Buffer.from(resolvedFileVariable[referenceKey].value).toString("base64")
-                  );
-                } else {
-                  variable.value = variable.value.replace(variable.args[i], resolvedFileVariable[referenceKey].value);
-                }
+                populateVariableValue(
+                  variable,
+                  undefined,
+                  variable.args[i + 1][0],
+                  variable.args[i],
+                  resolvedFileVariable[referenceKey].value
+                );
                 resolvedIndex.push(i);
               }
             }

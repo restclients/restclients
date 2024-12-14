@@ -38,6 +38,11 @@ describe("resolver.resolveDynamicVariable", function () {
       expect(res.value).toEqual("1719720573");
     });
 
+    it("$timestamp -1 m", function () {
+      const res = resolveDynamicVariable(["$timestamp", "-1", "m"]);
+      expect(res.value).toEqual("1719720513");
+    });
+
     it("$localDatetime iso8601", function () {
       const res = resolveDynamicVariable(["$localDatetime"]);
       expect(res.value).toEqual("2024-06-30T12:09:33+08:00");

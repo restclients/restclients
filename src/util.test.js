@@ -8,6 +8,8 @@ const {
   ContentType,
   getHeader,
   beautify,
+  padding,
+  logging,
 } = require("./util");
 
 describe("isValidUrl", function () {
@@ -254,11 +256,68 @@ describe("getHeader", function () {
   });
 });
 
+describe("logging", function () {
+  let spy;
+
+  beforeEach(() => {
+    const mockedDate = new Date("2024-06-30T12:09:33+08:00");
+    spy = jest.spyOn(global, "Date").mockImplementation(() => mockedDate);
+  });
+
+  afterEach(() => {
+    spy.mockRestore();
+  });
+
+  it("debug", function () {
+    const spy = jest.spyOn(console, "debug");
+    logging.level("debug");
+    logging.debug("debug %s", "unit test");
+    expect(spy).toHaveBeenNthCalledWith(1, "DEBUG 2024-06-30T04:09:33.000Z util.test.js:273 set log level debug");
+    expect(spy).toHaveBeenNthCalledWith(2, "DEBUG 2024-06-30T04:09:33.000Z util.test.js:274 debug unit test");
+    spy.mockRestore();
+  });
+
+  it("error", function () {
+    const spy = jest.spyOn(console, "error");
+    logging.level("error");
+    logging.error("error %s", "unit test");
+    expect(spy).toHaveBeenNthCalledWith(1, "ERROR 2024-06-30T04:09:33.000Z error unit test");
+    spy.mockRestore();
+  });
+});
+
+describe("padding", function () {
+  it("< width", function () {
+    const str = padding("aaa", " ", 10);
+    expect(str).toEqual("aaa       ");
+  });
+
+  it("= width", function () {
+    const str = padding("aaaaaaaaaa", " ", 10);
+    expect(str).toEqual("aaaaaaaaaa");
+  });
+
+  it("> width", function () {
+    const str = padding("aaaaaaaaaaaaaa", " ", 10);
+    expect(str).toEqual("aaaaaaaaaaaaaa");
+  });
+});
+
 describe("beautify", function () {
   describe("json", function () {
-    it("hello world", function () {
-      const beautified = beautify.json("{'text': 'hello world!'}");
-      expect(beautified).toEqual("{\n\t'text': 'hello world!'\n}");
+    it("{'text': 'hello \\' world!'}", function () {
+      const beautified = beautify.json("{'text': 'hello \\' world!'}");
+      expect(beautified).toEqual("{\n\t'text': 'hello \\' world!'\n}");
+    });
+
+    it("{\"text\": \"hello world!\"}", function () {
+      const beautified = beautify.json("{\"text\": \"hello \\\" world!\"}");
+      expect(beautified).toEqual("{\n\t\"text\": \"hello \\\" world!\"\n}");
+    });
+
+    it("` {'text': 'hello world!'} \t \n}", function () {
+      const beautified = beautify.json("` {'text': 'hello world!'} \t \n}");
+      expect(beautified).toEqual("`\n{\n\t'text': 'hello world!'\n}\n}");
     });
   });
 

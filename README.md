@@ -10,7 +10,9 @@
 
 # Rest Clients
 
-Rest Clients is a simple and secure Rest API Client, zero dependency, local storage and easy to share. This tool is intended to make HTTP requests sent via command line.\
+Rest Clients is a simple and secured Rest API Client, pure design and zero dependency, local storage and easy to share. This tool is intended to make HTTP requests sent via command line.
+
+
 This project is inspired by [REST Client](https://github.com/Huachao/vscode-restclient).
 
 ### Features

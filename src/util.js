@@ -475,10 +475,17 @@ exports.beautify = {
     let mode = MODE.START;
     let new_line = linebreak || "";
     let depth = 0;
+    let prefix = "";
+    let postfix = "";
+    let error = false;
 
     for (let i = 0; i < input.length; i++) {
       let ch = input[i];
 
+      if (error) {
+        postfix += ch;
+        continue;
+      }
       switch (mode) {
         case MODE.START:
           switch (ch) {
@@ -492,7 +499,9 @@ exports.beautify = {
             case "\n":
               break;
             default:
-              throw new Error("Invalid json string.");
+              prefix = prefix + ch;
+              break;
+            //throw new Error("Invalid json string.");
           }
           break;
 
@@ -511,7 +520,9 @@ exports.beautify = {
               depth--;
               output += createIndents(indent, depth) + ch;
               if (hierarchyStack.pop() !== HierarchyByToken[ch]) {
-                throw new Error("Invalid json string.");
+                error = true;
+                break;
+                //throw new Error("Invalid json string.");
               }
               if (depth === 0) {
                 mode = MODE.END;
@@ -551,7 +562,10 @@ exports.beautify = {
             case "\r":
               break;
             default:
-              throw new Error("Invalid json string.");
+              error = true;
+              postfix += ch;
+              break;
+            //throw new Error("Invalid json string.");
           }
           break;
 
@@ -591,10 +605,7 @@ exports.beautify = {
       }
     }
 
-    if (depth !== 0) {
-      throw new Error("Invalid json string.");
-    }
-    return output;
+    return `${prefix ? prefix + new_line : ""}${output}${postfix ? new_line + postfix : ""}`;
   },
   xml: (xmlStr, indentStr = "\t", linebreak = EOL) => {
     function parse(xmlStr) {
@@ -642,7 +653,8 @@ exports.beautify = {
 
       if (tags.length) {
         exports.logging.warn(
-          "xmlFile may be malformed. Not all opening tags were closed. Following tags were left open: %j", tags
+          "xmlFile may be malformed. Not all opening tags were closed. Following tags were left open: %j",
+          tags
         );
       }
 
